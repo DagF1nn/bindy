@@ -759,7 +759,13 @@ function Tegn-Øy([Drawing.Graphics]$g, [double]$sc, [double]$iB, [double]$iH, [
                 $lb = New-Object Drawing.SolidBrush((Farge $(if ($script:veiIkke) { '#d9b87a' } else { '#a9a1dd' })))
                 $g.DrawString($lab, $fStegL, $lb, ($x + 54), ($y + 12)); $lb.Dispose()
                 $tb = New-Object Drawing.SolidBrush((Farge '#f4f3fa'))
-                $g.DrawString(($pilleTekst -replace '^Steg: ', ''), $fSteg, $tb, (New-Object Drawing.RectangleF(($x + 54), ($y + 29), ($iB - 54 - 22), ($iH - 29 - 8))), $sfSteg); $tb.Dispose()
+                $ekstra = $(if ($script:kopiTil -and [DateTime]::Now -lt $script:kopiTil) { 30 } else { 0 })
+                $g.DrawString(($pilleTekst -replace '^Steg: ', ''), $fSteg, $tb, (New-Object Drawing.RectangleF(($x + 54), ($y + 29), ($iB - 54 - 22), ($iH - 29 - 8 - $ekstra))), $sfSteg); $tb.Dispose()
+                if ($ekstra -and $iH -gt 90) {   # varsel under steget: hva som er kopiert til utklippstavlen
+                    $lp = New-Object Drawing.Pen((Farge '#26233a'), 1); $g.DrawLine($lp, ($x + 54), ($y + $iH - 34), ($x + $iB - 22), ($y + $iH - 34)); $lp.Dispose()
+                    $kb = New-Object Drawing.SolidBrush((Farge '#7fbf9f')); $g.FillEllipse($kb, ($x + 54), ($y + $iH - 22), 8, 8); $kb.Dispose()
+                    $kt = New-Object Drawing.SolidBrush((Farge '#c9e6d8')); $g.DrawString($script:kopiTekst, $fStegL, $kt, (New-Object Drawing.RectangleF(($x + 70), ($y + $iH - 27), ($iB - 70 - 22), 18)), $sfPille); $kt.Dispose()
+                }
             }
         } elseif ($pilleTekst -and $iB -gt 140) {
             $tb = New-Object Drawing.SolidBrush((Farge '#d9d6ee'))
@@ -899,7 +905,7 @@ $script:fadeMål = 0.0; $script:hopp = 0; $script:ring = 0.0; $script:svarFull =
 $script:knappFlash = 0; $script:tipsTil = $null; $script:tenkTekst = 'Tenker'; $script:kollapsTid = $null; $script:fokusNår = $false
 # veiledning
 $script:vei = $false; $script:veiMål = ''; $script:veiSteg = '';
-$script:veiVis = ""; $script:veiIkke = $false; $script:kortB = 300; $script:kortH = 40; $script:stegMG = $null; $script:veiSig = $null; $script:veiPrev = $null; $script:veiStabil = 0; $script:veiAlle = $false
+$script:kopiTekst = ""; $script:kopiTil = $null; $script:veiVis = ""; $script:veiIkke = $false; $script:kortB = 300; $script:kortH = 40; $script:stegMG = $null; $script:veiSig = $null; $script:veiPrev = $null; $script:veiStabil = 0; $script:veiAlle = $false
 $script:veiSist = [DateTime]::MinValue; $script:veiUtenAkt = Get-Date; $script:veiSjekk = 0
 $script:veiKlikkTeller = 0; $script:veiKlikkTid = $null; $script:veiKlikkPos = $null
 $script:veiGjort = New-Object Collections.ArrayList; $script:mål = $null   # skjermkoordinater til forrige MARKER
@@ -1138,19 +1144,29 @@ function Øy-Rekt {
 $fSteg = New-Object Drawing.Font($Familie, 16, [Drawing.FontStyle]::Regular, [Drawing.GraphicsUnit]::Pixel)
 $fStegL = New-Object Drawing.Font($Familie, 11, [Drawing.FontStyle]::Bold, [Drawing.GraphicsUnit]::Pixel)
 $sfSteg = New-Object Drawing.StringFormat; $sfSteg.Trimming = 'EllipsisWord'
+# Varsel om hva Bindy har lagt på utklippstavlen: vises under steget (eller som pille) i noen sekunder og forsvinner av seg selv.
+function Kopi-Aktiv { [bool]($script:kopiTil -and [DateTime]::Now -lt $script:kopiTil) }
+function Sett-Kopiert([string]$t) {
+    $k = ($t -replace '\s+', ' ').Trim(); if ($k.Length -gt 46) { $k = $k.Substring(0, 45) + '…' }
+    $script:kopiTekst = "Kopiert til utklippstavlen: «$k»"; $script:kopiTil = [DateTime]::Now.AddSeconds(6)
+    if ($script:modus -eq 'skjult') { Sett-Modus 'pille'; $script:kollapsTid = [DateTime]::Now.AddSeconds(7) } elseif ($script:modus -eq 'pille') { Sett-Modus 'pille' }
+    $form.Invalidate()
+}
+function Kopi-Slutt { $script:kopiTil = $null; if ($script:modus -eq 'pille') { Sett-Modus 'pille' }; $form.Invalidate() }
 function Steg-Størrelse {
     if ($script:vei -and -not $script:jobb -and -not $script:pause -and -not ($script:toastTil -and [DateTime]::Now -lt $script:toastTil)) {
         $t = (Pille-Tekst) -replace '^Steg: ', ''
         if (-not $script:stegMG) { $script:stegMG = [Drawing.Graphics]::FromImage((New-Object Drawing.Bitmap(1, 1))) }
         $h = $script:stegMG.MeasureString($t, $fSteg, 380).Height
-        $script:kortB = 460; $script:kortH = [Math]::Min(220, [Math]::Max(68, [int]($h + 48)))
-    } else { $script:kortB = $(if ($script:vei) { 300 } else { 160 }); $script:kortH = 40 }
+        $script:kortB = 460; $script:kortH = [Math]::Min(220, [Math]::Max(68, [int]($h + 48))) + $(if (Kopi-Aktiv) { 30 } else { 0 })
+    } else { $script:kortB = $(if ($script:vei) { 300 } elseif (Kopi-Aktiv) { 440 } else { 160 }); $script:kortH = 40 }
 }
 function Pille-Tekst {
     if ($script:toastTil -and [DateTime]::Now -lt $script:toastTil) { return $script:toastTekst }
     if ($script:pause) { return 'Pauset' }
     if ($script:jobb) { return $script:tenkTekst + (' ·' * ([int]($script:tikk / 3) % 3 + 1)) }
     if ($script:vei -and $script:veiSteg) { return 'Steg: ' + (($(if ($script:veiVis) { $script:veiVis } else { $script:veiSteg })) -replace '\s+', ' ') }
+    if (-not $script:vei -and (Kopi-Aktiv)) { return $script:kopiTekst }
     if ($script:vei) { return 'Veiledning på' }
     return ''
 }
@@ -1238,6 +1254,10 @@ $klippLB = New-Object Windows.Forms.ListBox
 $klippLB.BorderStyle = 'None'; $klippLB.BackColor = $cØy; $klippLB.DrawMode = 'OwnerDrawFixed'; $klippLB.IntegralHeight = $false; $klippLB.Dock = 'Fill'
 $klippLB.ItemHeight = S 30; $klippLB.AccessibleName = 'Utklipp'
 $klippForm.Controls.Add($klippLB)
+$klippForm.Add_Paint({ param($snd, $ev)   # tynn rund kant, som kortet øverst
+    $g = $ev.Graphics; $g.SmoothingMode = 'AntiAlias'
+    $p = Rund-Sti 0.75 0.75 ($snd.Width - 1.5) ($snd.Height - 1.5) (S 14); $pn = New-Object Drawing.Pen((Farge '#35314f'), 1.5); $g.DrawPath($pn, $p); $pn.Dispose(); $p.Dispose()
+})
 $sfKlipp = New-Object Drawing.StringFormat; $sfKlipp.Trimming = 'EllipsisCharacter'; $sfKlipp.FormatFlags = 'NoWrap'; $sfKlipp.LineAlignment = 'Center'
 $klippLB.Add_DrawItem({ param($snd, $e)
     if ($e.Index -lt 0) { return }
@@ -1344,6 +1364,7 @@ function Lim-Inn([int]$i = -1) {
     if ($i -ge 0) { $script:klippN = [Math]::Min($i, $script:klipp.Count - 1) }
     $t = [string]$script:klipp[$script:klippN]
     try { $script:klippSist = $t; Sett-Utklipp $t } catch { Sett-Tips 'Utklippstavlen er opptatt'; return }
+    Sett-Kopiert $t
     $mål = $script:sistFremme
     if ($mål -eq [IntPtr]::Zero -or -not [Vin]::IsWindowVisible($mål)) { Sett-Tips 'Kopiert. Trykk Ctrl+V i feltet (fant ikke vinduet du kom fra).'; return }
     $mt = New-Object Text.StringBuilder 256; [void][Vin]::GetWindowText($mål, $mt, 256)
@@ -1355,7 +1376,7 @@ function Lim-Inn([int]$i = -1) {
     $pidM = 0; [void][Vin]::GetWindowThreadProcessId($mål, [ref]$pidM); $pnM = (Get-Process -Id $pidM -ErrorAction SilentlyContinue).ProcessName
     if ($pnM -match '^(WindowsTerminal|wt|conhost|powershell|pwsh|cmd|alacritty|mintty|wezterm|kitty|herdr|Code|Cursor|Windsurf|devenv|idea64|pycharm64)$') { Sett-Tips 'Kopiert. Terminalvinduer limes ikke inn automatisk: trykk Ctrl+V selv.'; return }
     if ([Vin]::ErHevet($mål)) { Sett-Tips 'Kopiert. Vinduet kjører som administrator, så Bindy limer ikke inn dit. Trykk Ctrl+V selv.'; return }
-    [Windows.Forms.SendKeys]::SendWait('^v'); $script:anbefalt = $false; Skjul-Klipp; Sett-Toast 'Limt inn'
+    [Windows.Forms.SendKeys]::SendWait('^v'); $script:anbefalt = $false; Skjul-Klipp; Kopi-Slutt; Sett-Toast 'Limt inn'
 }
 function Sett-Utklipp([string]$t) {   # Bindys egne kopier skal ikke havne i Windows utklippshistorikk eller sky-synk
     $do = New-Object Windows.Forms.DataObject; $do.SetText($t)
@@ -1365,7 +1386,7 @@ function Sett-Utklipp([string]$t) {   # Bindys egne kopier skal ikke havne i Win
 function Kopier-Lenke([string]$u) {
     $u = $u.TrimEnd('.', ',', ';', ':', '!', '?')
     if ($u -notmatch '^(?i)https?://') { $u = "https://$u" }
-    try { $script:klippSist = $u; Sett-Utklipp $u; Legg-Klipp $u; Sett-Tips 'Lenke kopiert til utklippstavlen' } catch { Sett-Tips 'Fikk ikke kopiert (utklippstavlen er opptatt)' }
+    try { $script:klippSist = $u; Sett-Utklipp $u; Legg-Klipp $u; Sett-Tips 'Lenke kopiert til utklippstavlen'; Sett-Kopiert $u } catch { Sett-Tips 'Fikk ikke kopiert (utklippstavlen er opptatt)' }
 }
 # Viser svaret ferdig (eller med «skrivemaskin»-effekt hvis $skriv) og kopierer første lenke automatisk.
 function Sett-Svar([string]$tekst, [bool]$skriv) {
@@ -1643,6 +1664,7 @@ $klokke.Add_Tick({
     }
     if ($script:tikk % 8 -eq 0 -and -not $script:pause) { Les-Utklipp }
     Klipp-Hover
+    if ($script:kopiTil -and [DateTime]::Now -ge $script:kopiTil) { Kopi-Slutt }   # kopi-varselet forsvinner av seg selv
     $j = $script:jobb
     if ($j) {
         Les-Strøm $j
