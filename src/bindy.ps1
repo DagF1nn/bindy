@@ -45,6 +45,151 @@ $script:delFil = Join-Path $Mappe 'bindy-del-utklipp'
 $script:delKlipp = Test-Path $script:delFil
 $script:musFil = Join-Path $Mappe 'bindy-musefolger-av'; $script:musPå = -not (Test-Path $script:musFil)   # musefølger på/av (fila finnes når den er av)
 $script:musFade = 0; $script:musSist = ''
+# ---- Settings and language. English is the default; Norwegian is a choice in Settings. Stored in %LOCALAPPDATA%\Bindy\bindy-settings.json. ----
+$script:InnstFil = Join-Path $Mappe 'bindy-settings.json'
+$script:StandardTaster = [ordered]@{ ask = 'Ctrl+Alt+H'; askNoScreen = 'Ctrl+Alt+J'; pause = 'Ctrl+Alt+P'; nextStep = 'Ctrl+Alt+N' }
+$script:TastId = [ordered]@{ ask = 1; askNoScreen = 2; pause = 3; nextStep = 4 }
+$script:Språk = 'en'; $script:Taster = [ordered]@{}; foreach ($k in $script:StandardTaster.Keys) { $script:Taster[$k] = $script:StandardTaster[$k] }
+$TastRegex = '^(?:(?:Ctrl|Alt|Shift|Win)\+){1,4}(?:[A-Z0-9]|F(?:[1-9]|1[0-9]|2[0-4]))$'   # filen kan skrives av annen kode: bare gyldige kombinasjoner godtas
+function Les-Innst {
+    try {
+        if (-not (Test-Path $script:InnstFil)) { return }
+        $j = Get-Content $script:InnstFil -Raw -Encoding UTF8 | ConvertFrom-Json
+        if ($j.language -in 'en', 'no') { $script:Språk = [string]$j.language }
+        foreach ($k in @($script:StandardTaster.Keys)) { $v = [string]$j.hotkeys.$k; if ($v -match $TastRegex) { $script:Taster[$k] = $v } }
+    } catch {}
+}
+function Lagre-Innst {
+    try { $o = [ordered]@{ language = $script:Språk; hotkeys = $script:Taster }; [IO.File]::WriteAllText($script:InnstFil, ($o | ConvertTo-Json -Depth 3), (New-Object Text.UTF8Encoding($false))) } catch {}
+}
+Les-Innst
+# Tastekombinasjon som tekst («Ctrl+Alt+H») til (modifikatorer, tastekode) for RegisterHotKey. 0x4000 = ikke gjenta.
+function Tast-Tolk([string]$k) {
+    if ($k -notmatch $TastRegex) { return $null }
+    $mod = 0x4000; foreach ($d in $k.Split('+')) { switch ($d) { 'Alt' { $mod = $mod -bor 1 } 'Ctrl' { $mod = $mod -bor 2 } 'Shift' { $mod = $mod -bor 4 } 'Win' { $mod = $mod -bor 8 } } }
+    $t = $k.Split('+')[-1]
+    $vk = $(if ($t -match '^F(\d+)$') { 0x6F + [int]$Matches[1] } else { [int][char]$t })   # A-Z og 0-9 har samme kode som tegnet
+    return @($mod, $vk)
+}
+$script:NO = @{
+    'Blocked window ({0}): passwords and banking are not captured.' = 'Sperret vindu ({0}): passord/bank fanges ikke.'
+    'A blocked window is on top: {0}' = 'Et sperret vindu ligger oppå: {0}'
+    'Cannot see all screens: {0} Close or minimise the window first.' = 'Kan ikke se alle skjermene: {0} Lukk eller minimer vinduet først.'
+    'Unreadable answer. {0}' = 'Uleselig svar. {0}'
+    'Copied to the clipboard: «{0}»' = 'Kopiert til utklippstavlen: «{0}»'
+    'Looking at: {0}' = 'Ser på: {0}'
+    'Goal: {0}' = 'Mål: {0}'
+    'Could not start Claude: {0}' = 'Kunne ikke starte Claude: {0}'
+    'Something went wrong: {0}' = 'Noe gikk galt: {0}'
+    'No activity for {0} minutes. Guidance stopped.' = 'Ingen aktivitet i {0} minutter. Veiledningen er stoppet.'
+    'Guidance stopped after {0} checks.' = 'Veiledningen stoppet etter {0} sjekker.'
+    'Error: {0}' = 'Feil: {0}'
+    'Enter asks  ·  Ctrl+Enter guides  ·  {0} next step  ·  Esc closes  ·  {1} pause' = 'Enter spør  ·  Ctrl+Enter veileder  ·  {0} neste steg  ·  Esc lukker  ·  {1} pause'
+    'Paused. {0} to resume' = 'Pauset. {0} for å fortsette'
+    '{0} is in use. Is Bindy already running, or has another app taken it?' = '{0} er opptatt. Kjører Bindy allerede, eller har en annen app tatt den?'
+    'Settings' = 'Innstillinger'
+    'Settings…' = 'Innstillinger …'
+    'Language' = 'Språk'
+    'Takes effect after Bindy restarts.' = 'Gjelder etter at Bindy er startet på nytt.'
+    'Restart now' = 'Start på nytt nå'
+    'Please restart Bindy yourself to apply the language.' = 'Start Bindy på nytt selv for å bruke språket.'
+    'General' = 'Generelt'
+    'Follow the mouse with the binder' = 'Binders som følger musa'
+    'Start Bindy with Windows' = 'Start Bindy med Windows'
+    'Hotkeys' = 'Hurtigtaster'
+    'Ask (with a screenshot of the window)' = 'Spør (med skjermbilde av vinduet)'
+    'Ask without a screenshot' = 'Spør uten skjermbilde'
+    'Pause or resume' = 'Pause eller fortsett'
+    'Next guidance step' = 'Neste steg i veiledningen'
+    'Press keys…' = 'Trykk tastene …'
+    'Use Ctrl or Alt plus a letter, number or F-key. Esc cancels.' = 'Bruk Ctrl eller Alt pluss en bokstav, et tall eller en F-tast. Esc avbryter.'
+    'That combination is already used for another action.' = 'Den kombinasjonen brukes allerede til noe annet i Bindy.'
+    'That combination is in use by another app.' = 'Den kombinasjonen brukes av et annet program.'
+    'In the input box' = 'I skrivefeltet'
+    'Enter: ask' = 'Enter: spør'
+    'Ctrl+Enter: guide me' = 'Ctrl+Enter: veiled meg'
+    'Shift+Enter: new line' = 'Shift+Enter: ny linje'
+    'Esc: close' = 'Esc: lukk'
+    'Reset hotkeys' = 'Tilbakestill hurtigtaster'
+    'Close' = 'Lukk'
+    'Thinking' = 'Tenker'
+    'Checking' = 'Sjekker'
+    'Stopped' = 'Stoppet'
+    'Paused' = 'Pauset'
+    'Resumed' = 'På igjen'
+    'Resume' = 'Fortsett'
+    'Stop' = 'Stopp'
+    'Guide me' = 'Veiled meg'
+    'Next step' = 'Neste steg'
+    'Pasted' = 'Limt inn'
+    'Writing' = 'Skriver'
+    'Writing answer…' = 'Skriver svar…'
+    'Guidance on' = 'Veiledning på'
+    'Guidance' = 'Veiledning'
+    'Ready' = 'Klar'
+    'Done.' = 'Ferdig.'
+    'Clips' = 'Utklipp'
+    'Clear history' = 'Tøm historikken'
+    'Nothing copied yet' = 'Ingenting kopiert ennå'
+    'Ask anything …' = 'Spør om noe …'
+    'Ask Bindy' = 'Spør Bindy'
+    'Ask (Enter)  ·  guide (Ctrl+Enter)' = 'Spør (Enter)  ·  veiled (Ctrl+Enter)'
+    'Hint' = 'Hjelpetekst'
+    'Answer from Bindy' = 'Svar fra Bindy'
+    'Question to Bindy' = 'Spørsmål til Bindy'
+    'Close to tray' = 'Lukk til tray'
+    'Screen: window' = 'Skjerm: vindu'
+    'Screen: all' = 'Skjerm: alle'
+    'Screen: off' = 'Skjerm: av'
+    'Screen: switch between window, all and off' = 'Skjerm: bytt mellom vindu, alle og av'
+    'Question only, no screen' = 'Bare spørsmål, uten skjerm'
+    'The window is small: looking at all screens' = 'Vinduet er lite: ser på alle skjermer'
+    'Looking at all screens' = 'Ser på alle skjermer'
+    'The clipboard is busy' = 'Utklippstavlen er opptatt'
+    'Copied. Press Ctrl+V in the field (could not find the window you came from).' = 'Kopiert. Trykk Ctrl+V i feltet (fant ikke vinduet du kom fra).'
+    'Copied but not pasted: this is a password or banking window.' = 'Kopiert, men ikke limt inn: dette er et passord- eller bankvindu.'
+    'Copied. Press Ctrl+V yourself.' = 'Kopiert. Trykk Ctrl+V selv.'
+    'Copied, but the window changed. Press Ctrl+V yourself.' = 'Kopiert, men vinduet endret seg. Trykk Ctrl+V selv.'
+    'Copied. Terminal windows are not pasted into automatically: press Ctrl+V yourself.' = 'Kopiert. Terminalvinduer limes ikke inn automatisk: trykk Ctrl+V selv.'
+    'Copied. The window runs as administrator, so Bindy does not paste there. Press Ctrl+V yourself.' = 'Kopiert. Vinduet kjører som administrator, så Bindy limer ikke inn dit. Trykk Ctrl+V selv.'
+    'Link copied to the clipboard' = 'Lenke kopiert til utklippstavlen'
+    'Could not copy (the clipboard is busy)' = 'Fikk ikke kopiert (utklippstavlen er opptatt)'
+    'Click a link in the answer to copy it.' = 'Klikk en lenke i svaret for å kopiere den.'
+    'Could not capture the screen, so guidance did not start.' = 'Fikk ikke bilde av skjermen, så veiledningen startet ikke.'
+    'Could not see the screen right now.' = 'Fikk ikke sett skjermen akkurat nå.'
+    'Bindy is thinking. Try again in a moment.' = 'Bindy tenker. Prøv igjen om et øyeblikk.'
+    'No guidance in progress' = 'Ingen veiledning pågår'
+    'The task and conversation are forgotten.' = 'Oppgaven og samtalen er glemt.'
+    'Bindy suggests a clip: click it in the list by the binder.' = 'Bindy anbefaler et utklipp: klikk det i lista ved bindersen.'
+    'I need to see more than this window, but could not capture all screens.' = 'Jeg trenger å se mer enn dette vinduet, men fikk ikke tatt bilde av alle skjermene.'
+    'Done! Guidance has ended.' = 'Ferdig! Veiledningen er avsluttet.'
+    'Next step (Ctrl+Alt+N)' = 'Neste steg (Ctrl+Alt+N)'
+    'Stop (cancel and stop guidance)' = 'Stopp (avbryt og stopp veiledning)'
+    'Forget the task (new goal)' = 'Glem oppgaven (nytt mål)'
+    'Open Bindy (ask without screen)' = 'Åpne Bindy (spør uten skjerm)'
+    'Clear clips' = 'Tøm utklipp'
+    'Share clips with Claude' = 'Del utklipp med Claude'
+    'Follow mouse' = 'Musefølger'
+    'Quit Bindy' = 'Avslutt Bindy'
+    'Bindy: PAUSED' = 'Bindy: PAUSET'
+    'Bindy: sending ...' = 'Bindy: sender ...'
+    'Bindy: GUIDANCE ON' = 'Bindy: VEILEDNING PÅ'
+    'NOT QUITE YET' = 'IKKE HELT ENNÅ'
+    'STEP' = 'STEG '
+    'Could not find the window.' = 'Fant ikke vinduet.'
+    'Could not find a window to capture.' = 'Fant ikke noe vindu å fange.'
+    'The window is too small.' = 'Vinduet er for lite.'
+    'Could not find claude. Install Claude Code and put it on PATH (see docs/INSTALL.md), then restart Bindy.' = 'Fant ikke claude. Installer Claude Code og legg den i PATH (se docs/INSTALL.md), start så Bindy på nytt.'
+    'Could not find claude. Install Claude Code and sign in (see docs/INSTALL.md), then restart Bindy.' = 'Fant ikke claude. Installer Claude Code og logg inn (se docs/INSTALL.md), start så Bindy på nytt.'
+    'Bindy is running. Press {0} to ask, or double-click the binder icon.' = 'Bindy kjører. Trykk {0} for å spørre, eller dobbeltklikk binders-ikonet.'
+    'What do I do now?' = 'Hva gjør jeg nå?'
+    'Share clips' = 'Del utklipp'
+}
+function L([string]$k, [Parameter(ValueFromRemainingArguments)][object[]]$a) {
+    $t = $k; if ($script:Språk -eq 'no' -and $script:NO.ContainsKey($k)) { $t = $script:NO[$k] }
+    if ($a -and $a.Count) { $t = $t -f $a }
+    return $t
+}
 function Legg-Klipp([string]$t) {
     if ($t.Length -gt 2000) { return }   # sjekk lengden før regex, så enorme kopier ikke fryser lista
     $t = ($t -replace '[\x00-\x08\x0B\x0C\x0E-\x1F]', '').Trim()
@@ -146,7 +291,8 @@ function Tøm-Klipp { $script:klipp.Clear(); $script:klippTid.Clear(); $script:k
 function Oppdater-Klipp {
     if ($null -ne $klippForm -and $klippForm.Visible) { Vis-Klipp $false }   # lista oppdateres mens den vises
 }
-$Systemprompt = 'Du er Bindy, brukerens hjelper på skjermen, en rolig og praktisk mentor. Når et skjermbilde er vedlagt, ser du vinduet (eller alle skjermene); ellers svarer du bare på spørsmålet. Svar på norsk, kort (maks 6 linjer, under veiledning bare 1-2 setninger): hva han ser og hva neste konkrete steg er. Vær konkret og gi svaret med en gang, er målet klart, svar med en gang uten å spørre tilbake. Spør bare når alternativene gir helt ulike resultater og du ikke kan avgjøre selv. Kan flere veier nå samme mål (for eksempel flere måter å åpne et program), velg selv den raskeste og enkleste og gå rett på sak uten å spørre. Må du spørre (flere apper, vinduer eller skjermer, eller et uklart mål), skriv STATUS: SPØRSMÅL først, ett kort spørsmål uten å liste alternativene i teksten, og så 2-4 alternativer som egne linjer [[VALG kort tekst]] (maks 40 tegn hver). brukeren trykker på en knapp, han skriver ikke. Ingen MARKER ved spørsmål. Prioritering: det brukeren skriver nå og det bildet viser går alltid foran bakgrunnsnotat og tidligere samtale; hold aldri fast på en gammel oppgave hvis han spør om noe annet. Bruk oppgavenotatet og tidligere spørsmål som kontekst. Gjengi aldri passord, kontonumre eller private meldinger. Hvis bildet ikke viser nok til å svare trygt (for eksempel et lite eller beskåret vindu, eller målet ikke er synlig), skriv BEHOV: HELE_SKJERMEN som første linje og ingenting mer, så får du bildet av alle skjermene hans. Når brukeren spør hvor han skal trykke på bildet, eller et steg handler om et bestemt felt eller en knapp, MÅ svaret avsluttes med en egen linje [[MARKER x1 y1 x2 y2]] med heltall i bildets piksler (venstre topp høyre bunn rundt akkurat det elementet). Ikke bruk MARKER ellers, og aldri uten bilde. Du kan i tillegg tegne på skjermen med egne linjer på slutten, alle med koordinater i bildets piksler: [[PIL x1 y1 x2 y2]] (pil fra start til spiss: la spissen treffe målet og start i et tomt område), [[SIRKEL x y r]] (sirkel rundt noe lite), [[RAMME x1 y1 x2 y2]] (ekstra ramme), [[NR x y n]] (nummerert merke når rekkefølgen betyr noe, n fra 1) og [[TEKST x y kort tekst]] (etikett på maks 40 tegn). MARKER skal fortsatt alltid være rundt hovedmålet. Rommer MARKER-boksen flere ting (for eksempel en rad med skjulte ikoner, en meny eller en liste), skal du i tillegg skrive [[PEKER x y]] på egen linje: ett punkt midt på det ENE elementet brukeren skal trykke på, så binderspekeren peker dit og ikke bare mot midten av boksen. Bruk så mange tegn som trengs (opptil 12), men ikke flere enn det som hjelper. Skriptet flytter merker og etiketter så de ikke havner oppå hverandre, men velg likevel punkter som ligger fornuftig fordelt. Skriv ren tekst uten markdown (ingen **, #, backticks eller lister med stjerner). Lenker skrives helt ut på egen linje. Hvis instruksjonen ber om en STATUS-linje, skal den være første linje i svaret.'
+$SvarSpråk = $(if ($script:Språk -eq 'no') { 'Norwegian (bokmål)' } else { 'English' })
+$Systemprompt = "You are Bindy, the user's helper on the screen: a calm, practical mentor. When a screenshot is attached you see the window (or all screens); otherwise you just answer the question. Reply in $SvarSpråk, short (max 6 lines; during guidance only 1-2 sentences): what the user sees and what the next concrete step is. Be concrete and answer immediately; if the goal is clear, answer without asking back. Ask only when the options give completely different results and you cannot decide yourself. If several ways reach the same goal (for example several ways to open a program), pick the fastest and simplest yourself and get straight to the point without asking. If you must ask (several apps, windows or screens, or an unclear goal), write STATUS: SPØRSMÅL first, one short question without listing the options in the text, and then 2-4 options as separate lines [[VALG short text]] (max 40 characters each). The user presses a button, they do not type. No MARKER with questions. Priority: what the user writes now and what the picture shows always come before the background note and earlier conversation; never cling to an old task if they ask about something else. Use the task note and earlier questions as context. Never repeat passwords, account numbers or private messages. If the picture does not show enough to answer safely (for example a small or cropped window, or the target is not visible), write BEHOV: HELE_SKJERMEN as the first line and nothing more, and you will get a picture of all their screens. When the user asks where to click in the picture, or a step is about a specific field or button, the answer MUST end with its own line [[MARKER x1 y1 x2 y2]] with integers in the picture's pixels (left top right bottom around exactly that element). Do not use MARKER otherwise, and never without a picture. You may also draw on the screen with your own lines at the end, all with coordinates in the picture's pixels: [[PIL x1 y1 x2 y2]] (arrow from start to tip: let the tip hit the target and start in an empty area), [[SIRKEL x y r]] (circle around something small), [[RAMME x1 y1 x2 y2]] (extra frame), [[NR x y n]] (numbered mark when order matters, n from 1) and [[TEKST x y short text]] (label of max 40 characters). MARKER must still always be around the main target. If the MARKER box holds several things (for example a row of hidden icons, a menu or a list), also write [[PEKER x y]] on its own line: one point in the middle of the ONE element the user should click, so the binder pointer points there and not just at the middle of the box. Use as many marks as needed (up to 12), but no more than helps. The script moves marks and labels so they do not land on top of each other, but still choose sensibly spread points. Write plain text without markdown (no **, #, backticks or lists with asterisks). Write links in full on their own line. If the instruction asks for a STATUS line, it must be the first line of the reply."
 
 Add-Type -ReferencedAssemblies System.Windows.Forms, System.Drawing -TypeDefinition @"
 using System;
@@ -203,6 +349,7 @@ public class HurtigtastVindu : NativeWindow, IDisposable {
     public event Action<int> Trykket;
     public HurtigtastVindu() { CreateHandle(new CreateParams()); }
     public bool Registrer(int id, uint mod, uint vk) { return RegisterHotKey(Handle, id, mod, vk); }
+    public void Fjern(int id) { UnregisterHotKey(Handle, id); }
     protected override void WndProc(ref Message m) {
         if (m.Msg == 0x0312 && Trykket != null) Trykket((int)m.WParam);
         base.WndProc(ref m);
@@ -439,7 +586,7 @@ function Finn-Mål {
 function Sperre-Grunn($h, [string]$tittel) {
     $pid_ = 0; [void][Vin]::GetWindowThreadProcessId($h, [ref]$pid_)
     $prosess = (Get-Process -Id $pid_ -ErrorAction SilentlyContinue).ProcessName
-    if ($tittel -match $Sperret -or $prosess -match $SperretProsess) { return "Sperret vindu ($prosess): passord/bank fanges ikke." }
+    if ($tittel -match $Sperret -or $prosess -match $SperretProsess) { return (L 'Blocked window ({0}): passwords and banking are not captured.' $prosess) }
     return $null
 }
 
@@ -480,15 +627,15 @@ function Sperret-Overlapp($r) {
 }
 function Fang-Vindu {
     $h = Finn-Mål
-    if ($h -eq [IntPtr]::Zero) { return @{ ok = $false; grunn = 'Fant ikke noe vindu å fange.' } }
+    if ($h -eq [IntPtr]::Zero) { return @{ ok = $false; grunn = (L 'Could not find a window to capture.') } }
     $tittel = Vindustittel $h
     $sg = Sperre-Grunn $h $tittel
     if ($sg) { return @{ ok = $false; grunn = $sg } }
     $r = New-Object Vin+RECT
-    if (-not [Vin]::GetWindowRect($h, [ref]$r)) { return @{ ok = $false; grunn = 'Fant ikke vinduet.' } }
+    if (-not [Vin]::GetWindowRect($h, [ref]$r)) { return @{ ok = $false; grunn = (L 'Could not find the window.') } }
     $b = $r.R - $r.L; $hø = $r.B - $r.T
-    if ($b -lt 50 -or $hø -lt 50) { return @{ ok = $false; grunn = 'Vinduet er for lite.' } }
-    $so = Sperret-Overlapp $r; if ($so) { return @{ ok = $false; grunn = "Et sperret vindu ligger oppå: $so" } }
+    if ($b -lt 50 -or $hø -lt 50) { return @{ ok = $false; grunn = (L 'The window is too small.') } }
+    $so = Sperret-Overlapp $r; if ($so) { return @{ ok = $false; grunn = (L 'A blocked window is on top: {0}' $so) } }
     Skjul-Overlay
     try {
         $full = New-Object Drawing.Bitmap($b, $hø)
@@ -504,7 +651,7 @@ function Fang-Alle {
     while ($h -ne [IntPtr]::Zero) {
         if ([Vin]::IsWindowVisible($h) -and -not [Vin]::IsIconic($h)) {
             $t = Vindustittel $h
-            if ($t) { $sg = Sperre-Grunn $h $t; if ($sg) { return @{ ok = $false; grunn = "Kan ikke se alle skjermene: $sg Lukk eller minimer vinduet først." } } }
+            if ($t) { $sg = Sperre-Grunn $h $t; if ($sg) { return @{ ok = $false; grunn = (L 'Cannot see all screens: {0} Close or minimise the window first.' $sg) } } }
         }
         $h = [Vin]::GetWindow($h, 2)
     }
@@ -580,7 +727,7 @@ function Les-Notat {
 function Arkiver-Oppgave {
     $script:logg.Clear()
     if (Test-Path $Notat) { Copy-Item $Notat ($Notat -replace '\.md$', '.forrige.md') -Force }
-    [IO.File]::WriteAllText($Notat, "# (ingen aktiv oppgave)`n", (New-Object Text.UTF8Encoding($false)))
+    [IO.File]::WriteAllText($Notat, "# (no active task)`n", (New-Object Text.UTF8Encoding($false)))
 }
 
 # Starter Claude. Svaret leses linje for linje (Les-Strøm), så teksten kan vises mens den skrives.
@@ -590,7 +737,7 @@ function Start-Claude([string]$spørsmål, [byte[]]$jpeg, [string]$modell) {
     if ($jpeg) { $innhold += @{ type = 'image'; source = @{ type = 'base64'; media_type = 'image/jpeg'; data = [Convert]::ToBase64String($jpeg) } } }
     $linje = (@{ type = 'user'; message = @{ role = 'user'; content = $innhold } } | ConvertTo-Json -Depth 8 -Compress) + "`n"
     $psi = New-Object Diagnostics.ProcessStartInfo
-    if (-not $script:ClaudeSti) { throw 'Fant ikke claude. Installer Claude Code og legg den i PATH (se docs/INSTALLASJON.md), start så Bindy på nytt.' }
+    if (-not $script:ClaudeSti) { throw (L 'Could not find claude. Install Claude Code and put it on PATH (see docs/INSTALL.md), then restart Bindy.') }
     $psi.FileName = $script:ClaudeSti
     [void]$psi.EnvironmentVariables.Remove('NODE_OPTIONS')   # ingen injisert kode i claude via Node-innstillinger
     $psi.WorkingDirectory = $Arbeid
@@ -631,7 +778,7 @@ function Les-Svar([string]$stdout, [string]$stderr) {
             return ([string]$d.result).Trim()
         }
     }
-    throw "Uleselig svar. $($stderr.Substring(0, [Math]::Min(300, $stderr.Length)))"
+    throw (L 'Unreadable answer. {0}' ($stderr.Substring(0, [Math]::Min(300, $stderr.Length))))
 }
 
 # Plukker ut BEHOV-, STATUS-linja og [[MARKER x1 y1 x2 y2]]. Returnerer @{ tekst; boks; status; behov }.
@@ -683,29 +830,29 @@ function Rens-Delvis([string]$t) {
 # modus: 'spor' (vanlig spørsmål, med bilde hvis $b > 0), 'start' (brukeren ber om veiledning), 'sjekk' (automatisk, skjermen har endret seg)
 function Lag-Spørsmål([string]$q, $logg, [int]$b, [int]$h, [string]$modus, [string]$steg, [bool]$alle) {
     $notat = Les-Notat
-    $s = "SPRÅK: Svar på norsk, ekstremt enkelt og kort, som til noen som aldri har brukt data. Korte hverdagsord, ingen fagord eller engelske knappenavn uten forklaring, maks 2 korte setninger (et steg er én setning på under 12 ord). Svaret vises i en liten taleboks ved bindersen.`n`n"
-    if ($notat) { $s += "BAKGRUNN fra brukerens samtale med Claude i terminalen (kan være utdatert; bruk den bare hvis den passer med det brukeren spør om eller det bildet viser):`n$notat`n`n" }
+    $s = "LANGUAGE: Reply in $SvarSpråk, extremely simple and short, as if to someone who has never used a computer. Short everyday words, no jargon or technical terms without explanation, max 2 short sentences (a step is one sentence of under 12 words).`n`n"
+    if ($notat) { $s += "BACKGROUND from the user's conversation with Claude in the terminal (may be outdated; use it only if it fits what the user asks about or what the picture shows):`n$notat`n`n" }
     $siste = @($logg | Where-Object { ((Get-Date) - $_.t).TotalMinutes -lt 10 } | Select-Object -Last 6)
-    if ($siste.Count) { $s += "TIDLIGERE I DENNE ØKTA:`n" + (($siste | ForEach-Object { "brukeren: $($_.q)`nBindy: $($_.a)" }) -join "`n") + "`n`n" }
+    if ($siste.Count) { $s += "EARLIER IN THIS SESSION:`n" + (($siste | ForEach-Object { "user: $($_.q)`nBindy: $($_.a)" }) -join "`n") + "`n`n" }
     $script:klippSendt = $(if ($script:delKlipp) { @($script:klipp | Select-Object -First 6) } else { @() })
-    $kb = "UTKLIPPSTAVLEN (brukerens siste kopier, nyeste først; privat, bruk bare det som er relevant og gjengi aldri passord):`n"
-    if ($script:klippSendt.Count) { $ki = 0; $kb += (($script:klippSendt | ForEach-Object { $ki++; $v = ($_ -replace '\s+', ' '); "$ki. " + $(if ($v.Length -gt 200) { $v.Substring(0, 200) + '…' } else { $v }) }) -join "`n") + "`n" } else { $kb += "(tom)`n" }
-    if (-not $script:delKlipp) { $kb = "UTKLIPPSTAVLEN: brukeren deler ikke utklippene sine med deg, så du ser dem ikke og kan ikke anbefale [[LIM n]]. Trenger han tekst limt inn (en lenke, en adresse, et ord), skriv en egen linje [[SKRIV tekst]] (én linje, maks 300 tegn, ren tekst, uten tegnet ]) og si kort hva som limes inn. brukeren trykker selv «Lim inn».`n`n" } else {
-    $kb += "Skal brukeren nå lime inn noe: anbefal en av dem med en egen linje [[LIM n]]. Trenger han tekst som ikke står i lista (en lenke, en adresse, et ord han skal skrive): skriv en egen linje [[SKRIV tekst]] (én linje, maks 300 tegn, ren tekst, uten tegnet ]) og si kort i svaret hva som limes inn. brukeren trykker selv «Lim inn», du skriver ikke selv. Bruk dem bare når steget faktisk handler om å skrive eller lime inn noe; under veiledning gir du teksten i det steget som trenger den.`n`n" }
+    $kb = "CLIPBOARD (the user's latest copies, newest first; private, use only what is relevant and never repeat passwords):`n"
+    if ($script:klippSendt.Count) { $ki = 0; $kb += (($script:klippSendt | ForEach-Object { $ki++; $v = ($_ -replace '\s+', ' '); "$ki. " + $(if ($v.Length -gt 200) { $v.Substring(0, 200) + '…' } else { $v }) }) -join "`n") + "`n" } else { $kb += "(empty)`n" }
+    if (-not $script:delKlipp) { $kb = "CLIPBOARD: the user does not share their clips with you, so you cannot see them and cannot recommend [[LIM n]]. If the user needs text pasted (a link, an address, a word), write your own line [[SKRIV text]] (one line, max 300 characters, plain text, without the character ]) and say briefly what will be pasted. The user presses Paste themselves.`n`n" } else {
+    $kb += "If the user should paste something now: recommend one of them with your own line [[LIM n]]. If the user needs text that is not in the list (a link, an address, a word to type): write your own line [[SKRIV text]] (one line, max 300 characters, plain text, without the character ]) and say briefly in the answer what will be pasted. The user presses Paste themselves, you do not type for them. Use these only when the step is actually about typing or pasting something; during guidance you give the text in the step that needs it.`n`n" }
     $s += $kb
     $mark = "[[MARKER x1 y1 x2 y2]]"
-    $bilde = $(if ($alle) { "Bildet viser ALLE skjermene side om side og er $b x $h piksler." } else { "Bildet viser ett vindu og er $b x $h piksler." })
+    $bilde = $(if ($alle) { "The picture shows ALL the screens side by side and is $b x $h pixels." } else { "The picture shows one window and is $b x $h pixels." })
     if ($alle -and $script:geom -and $script:geom.skala) {   # flere skjermer: si hvor de ligger i bildet og hvilken musa står på, så veiledningen holder seg der
         $sk = $script:geom.skala; $mp = [Windows.Forms.Cursor]::Position; $si = 0; $med = 0; $deler = @()
-        foreach ($sc in [Windows.Forms.Screen]::AllScreens) { $si++; $r = $sc.Bounds; if ($r.Contains($mp)) { $med = $si }; $deler += ("skjerm $si = x " + [int](($r.Left - $script:geom.L) / $sk) + " til " + [int](($r.Right - $script:geom.L) / $sk) + ", y " + [int](($r.Top - $script:geom.T) / $sk) + " til " + [int](($r.Bottom - $script:geom.T) / $sk)) }
-        if ($si -gt 1 -and $med) { $bilde += " Skjermene i bildet: " + ($deler -join '; ') + ". Musepekeren står på skjerm $med. PRIORITER skjerm ${med}: veiled der så lenge steget kan gjøres der. Send bare brukeren til en annen skjerm når det ikke går, og si da tydelig hvilken skjerm." }
+        foreach ($sc in [Windows.Forms.Screen]::AllScreens) { $si++; $r = $sc.Bounds; if ($r.Contains($mp)) { $med = $si }; $deler += ("screen $si = x " + [int](($r.Left - $script:geom.L) / $sk) + " to " + [int](($r.Right - $script:geom.L) / $sk) + ", y " + [int](($r.Top - $script:geom.T) / $sk) + " to " + [int](($r.Bottom - $script:geom.T) / $sk)) }
+        if ($si -gt 1 -and $med) { $bilde += " The screens in the picture: " + ($deler -join '; ') + ". The mouse pointer is on screen $med. PRIORITISE screen ${med}: guide there as long as the step can be done there. Only send the user to another screen when it cannot be done, and then say clearly which screen." }
     }
     switch ($modus) {
-        'start' { return $s + "$bilde brukeren vil bli veiledet steg for steg gjennom: $q`nGi BARE neste steg: én kort setning om hva han skal gjøre nå, og avslutt med $mark rundt akkurat det han skal trykke på eller bruke. Første linje i svaret skal være: STATUS: STEG. Hvert steg er ÉN fysisk handling (ett klikk, eller skriv ett ord), aldri flere handlinger i samme steg, og alltid med MARKER rundt elementet og [[PEKER x y]] på det ene punktet han skal trykke på, så han aldri må lete. Velg selv den raskeste veien når flere går (ikke spør om det). Unntak: må du spørre fordi alternativene gir ulike resultater, skriv STATUS: SPØRSMÅL som første linje, ett kort spørsmål og 2-4 linjer [[VALG kort tekst]] (ingen MARKER, ingen steg ennå)." }
-        'sjekk' { return $s + "VEILEDNING PÅGÅR. brukerens mål (det han selv ba om): «$($script:veiMål)». Steget du ga sist: «$steg». $($script:ståttNote)Skjermen har endret seg siden. Bildet er tatt ETTER at brukeren handlet: vurder ut fra hva skjermen viser nå. Er resultatet av steget synlig (for eksempel at menyen eller vinduet har åpnet seg), svar GJORT selv om det ser litt annerledes ut enn du ventet. Svar IKKE_GJORT bare når du ser at det ikke har skjedd. $bilde Første linje i svaret skal være nøyaktig én av disse:`nSTATUS: GJORT (steget er gjort: gi så neste steg, én kort setning med én enkelt handling, og avslutt med $mark pluss [[PEKER x y]] på det ene punktet han skal trykke på)`nSTATUS: IKKE_GJORT (ikke gjort ennå: si kort hva som mangler, og $mark om relevant)`nSTATUS: FERDIG (hele oppgaven er ferdig: si det kort)`nSkriv ingenting før STATUS-linja." }
+        'start' { return $s + "$bilde The user wants to be guided step by step through: $q`nGive ONLY the next step: one short sentence about what to do now, and end with $mark around exactly what to click or use. The first line of the answer must be: STATUS: STEG. Each step is ONE physical action (one click, or type one word), never several actions in the same step, and always with MARKER around the element and [[PEKER x y]] on the one point to click, so the user never has to search. Pick the fastest way yourself when several work (do not ask about it). Exception: if you must ask because the options give different results, write STATUS: SPØRSMÅL as the first line, one short question and 2-4 lines [[VALG short text]] (no MARKER, no step yet)." }
+        'sjekk' { return $s + "GUIDANCE IN PROGRESS. The user's goal (what they asked for): «$($script:veiMål)». The step you gave last: «$steg». $($script:ståttNote)The screen has changed since. The picture was taken AFTER the user acted: judge from what the screen shows now. If the result of the step is visible (for example the menu or window has opened), answer GJORT even if it looks slightly different from what you expected. Answer IKKE_GJORT only when you can see it has not happened. $bilde The first line of the answer must be exactly one of these:`nSTATUS: GJORT (the step is done: then give the next step, one short sentence with a single action, and end with $mark plus [[PEKER x y]] on the one point to click)`nSTATUS: IKKE_GJORT (not done yet: say briefly what is missing, and $mark if relevant)`nSTATUS: FERDIG (the whole task is done: say so briefly)`nWrite nothing before the STATUS line." }
         default {
-            if ($b -le 0) { return $s + "brukerens spørsmål (ingen skjermbilde vedlagt): $q" }
-            return $s + "$bilde brukerens spørsmål: $q`n`n(Handler spørsmålet om hvor noe er eller hvor han skal trykke, MÅ siste linje i svaret være $mark i bildets piksler.)"
+            if ($b -le 0) { return $s + "The user's question (no screenshot attached): $q" }
+            return $s + "$bilde The user's question: $q`n`n(If the question is about where something is or where to click, the last line of the answer MUST be $mark in the picture's pixels.)"
         }
     }
 }
@@ -755,7 +902,7 @@ function Tegn-Øy([Drawing.Graphics]$g, [double]$sc, [double]$iB, [double]$iH, [
     if ($liten) {
         if ($steg) {   # stegkort: nummer i aksentfarge og selve steget stort og hvitt
             if ($iB -gt 330 -and $iH -gt 56) {
-                $lab = $(if ($script:veiIkke) { 'IKKE HELT ENNÅ' } else { 'STEG ' + ($script:veiGjort.Count + 1) })
+                $lab = $(if ($script:veiIkke) { (L 'NOT QUITE YET') } else { (L 'STEP') + ($script:veiGjort.Count + 1) })
                 $lb = New-Object Drawing.SolidBrush((Farge $(if ($script:veiIkke) { '#d9b87a' } else { '#a9a1dd' })))
                 $g.DrawString($lab, $fStegL, $lb, ($x + 54), ($y + 12)); $lb.Dispose()
                 $tb = New-Object Drawing.SolidBrush((Farge '#f4f3fa'))
@@ -774,9 +921,9 @@ function Tegn-Øy([Drawing.Graphics]$g, [double]$sc, [double]$iB, [double]$iH, [
     } elseif ($iB -gt $PanelB * 0.8) {   # panelet: status til høyre i toppfeltet og en tynn skillelinje
         $sb = New-Object Drawing.SolidBrush((Farge $statusFarge))
         $tw = $g.MeasureString($statusTekst, $fStatus).Width - 6
-        $g.FillEllipse($sb, ($x + $iB - 46 - $tw - 14), ($y + 24), 7, 7); $sb.Dispose()
+        $g.FillEllipse($sb, ($x + $iB - 80 - $tw - 14), ($y + 24), 7, 7); $sb.Dispose()
         $tb = New-Object Drawing.SolidBrush((Farge '#9b98b0'))
-        $g.DrawString($statusTekst, $fStatus, $tb, (New-Object Drawing.RectangleF(($x + $iB - 136), ($y + 14), 90, 28)), $sfHøyre); $tb.Dispose()
+        $g.DrawString($statusTekst, $fStatus, $tb, (New-Object Drawing.RectangleF(($x + $iB - 170), ($y + 14), 90, 28)), $sfHøyre); $tb.Dispose()
         $lp = New-Object Drawing.Pen((Farge '#1e1c2e'), 1); $g.DrawLine($lp, ($x + 16), ($y + 52), ($x + $iB - 16), ($y + 52)); $lp.Dispose()
     }
     $g.ResetTransform()
@@ -848,11 +995,11 @@ if ($Sjekk) {
     $d = Del-Svar "BEHOV: HELE_SKJERMEN`n"
     if (-not $d.behov -or $d.tekst) { Write-Host 'FEIL: Del-Svar behov'; $fe++ }
     if ((Rens-Delvis "STATUS: GJ") -ne '' -or (Rens-Delvis "Hei [[MARK") -ne 'Hei') { Write-Host 'FEIL: Rens-Delvis'; $fe++ }
-    if ((Lag-Spørsmål 'hei' @() 0 0 'spor' '' $false) -notmatch 'ingen skjermbilde') { Write-Host 'FEIL: tekstspørsmål'; $fe++ }
+    if ((Lag-Spørsmål 'hei' @() 0 0 'spor' '' $false) -notmatch 'no screenshot') { Write-Host 'FEIL: tekstspørsmål'; $fe++ }
     $png = Join-Path $env:TEMP 'bindy-oy.png'
     $bm = New-Object Drawing.Bitmap(960, 420); $g = [Drawing.Graphics]::FromImage($bm)
     $g.Clear([Drawing.Color]::FromArgb(60, 60, 70))
-    Tegn-Øy $g 1.0 440 260 0 $false 0.5 '' 'Klar' '#8a87a3'; $g.Dispose(); $bm.Save($png)
+    Tegn-Øy $g 1.0 440 260 0 $false 0.5 '' (L 'Ready') '#8a87a3'; $g.Dispose(); $bm.Save($png)
     Write-Host "Øya tegnet: $png"
     $pp = New-Object Peker; $pp.Skala = 1.0; $pb = New-Object Drawing.Bitmap(760, 190); $pg = [Drawing.Graphics]::FromImage($pb); $pg.Clear([Drawing.Color]::FromArgb(60, 60, 70))
     $k = 0; foreach ($t in @(@(0, 0), @(0.5, 20), @(1, 90), @(1, 200))) {
@@ -883,7 +1030,7 @@ if ($Prov) {
     [Console]::OutputEncoding = [Text.Encoding]::UTF8
     $f = Fang-Vindu
     if (-not $f.ok) { Write-Host $f.grunn; exit 1 }
-    $q = Lag-Spørsmål 'Hva gjør jeg nå? Vis meg hvor tittellinjen er.' @() $f.bitmap.Width $f.bitmap.Height 'spor' '' $false
+    $q = Lag-Spørsmål 'What do I do now? Show me where the title bar is.' @() $f.bitmap.Width $f.bitmap.Height 'spor' '' $false
     $j = Start-Claude $q (Til-Jpeg $f.bitmap) $ModellSpør
     $ut = $j.p.StandardOutput.ReadToEnd(); [void]$j.p.WaitForExit(120000)
     $d = Del-Svar (Les-Svar $ut $j.feil.Result)
@@ -902,7 +1049,7 @@ $script:pause = $false; $script:toastTekst = ''; $script:toastTil = $null
 # øya
 $script:modus = 'skjult'; $script:iB = 120.0; $script:iH = 38.0; $script:iBm = 120.0; $script:iHm = 38.0
 $script:fadeMål = 0.0; $script:hopp = 0; $script:ring = 0.0; $script:svarFull = ''; $script:visN = 0; $script:strømmer = $false
-$script:knappFlash = 0; $script:tipsTil = $null; $script:tenkTekst = 'Tenker'; $script:kollapsTid = $null; $script:fokusNår = $false
+$script:knappFlash = 0; $script:tipsTil = $null; $script:tenkTekst = (L 'Thinking'); $script:kollapsTid = $null; $script:fokusNår = $false
 # veiledning
 $script:vei = $false; $script:veiMål = ''; $script:veiSteg = '';
 $script:kopiTekst = ""; $script:kopiTil = $null; $script:veiVis = ""; $script:veiIkke = $false; $script:kortB = 300; $script:kortH = 40; $script:stegMG = $null; $script:veiSig = $null; $script:veiPrev = $null; $script:veiStabil = 0; $script:veiAlle = $false
@@ -1062,12 +1209,12 @@ $bokSvar.Controls.Add($svar)
 $bokInn = Ny-Boks
 $inn = New-Object Windows.Forms.TextBox
 $inn.BorderStyle = 'None'; $inn.BackColor = $cFlate; $inn.ForeColor = $cTekst; $inn.Font = $fTekst
-$inn.Add_HandleCreated({ [void][Vin]::SendMessage($inn.Handle, 0x1501, 1, 'Spør om noe …') })   # plassholdertekst
+$inn.Add_HandleCreated({ [void][Vin]::SendMessage($inn.Handle, 0x1501, 1, (L 'Ask anything …')) })   # plassholdertekst
 $bokInn.Controls.Add($inn)
 $lblTips = New-Object Windows.Forms.Label
 $lblTips.ForeColor = $cDempet; $lblTips.BackColor = $cØy; $lblTips.Font = $fSmå; $lblTips.TextAlign = 'MiddleLeft'
-$TipsStandard = 'Enter spør  ·  Ctrl+Enter veileder  ·  Ctrl+Alt+N neste steg  ·  Esc lukker  ·  Ctrl+Alt+P pause'
-$lblTips.Text = $TipsStandard
+$script:TipsStandard = (L 'Enter asks  ·  Ctrl+Enter guides  ·  {0} next step  ·  Esc closes  ·  {1} pause' $script:Taster.nextStep $script:Taster.pause)
+$lblTips.Text = $script:TipsStandard
 function Ny-Knapp([string]$tekst, [string]$bak, [string]$over, [string]$tekstFarge, [bool]$fet) {
     $k = New-Object Windows.Forms.Button
     $k.Text = $tekst; $k.FlatStyle = 'Flat'; $k.FlatAppearance.BorderSize = 0; $k.UseVisualStyleBackColor = $false
@@ -1075,26 +1222,27 @@ function Ny-Knapp([string]$tekst, [string]$bak, [string]$over, [string]$tekstFar
     $k.FlatAppearance.MouseOverBackColor = (Farge $over); $k.FlatAppearance.MouseDownBackColor = (Farge $over)
     return $k
 }
-$knappSkjerm = Ny-Knapp 'Skjerm: vindu' '#17151f' '#222035' '#d9d6ee' $false
+$knappSkjerm = Ny-Knapp (L 'Screen: window') '#17151f' '#222035' '#d9d6ee' $false
 $knappPause = Ny-Knapp 'Pause' '#17151f' '#222035' '#d9d6ee' $false
-$knapp = Ny-Knapp 'Veiled meg' '#8f87c2' '#a39cd3' '#14121d' $true
-$knappStopp = Ny-Knapp 'Stopp' '#3a1f22' '#4d282c' '#f0c4c0' $false
+$knapp = Ny-Knapp (L 'Guide me') '#8f87c2' '#a39cd3' '#14121d' $true
+$knappStopp = Ny-Knapp (L 'Stop') '#3a1f22' '#4d282c' '#f0c4c0' $false
 $knappLukk = Ny-Knapp ([string][char]0x2715) '#0b0a12' '#222035' '#9b98b0' $false
-$knappLukk.AccessibleName = 'Lukk til tray'; $knappStopp.AccessibleName = 'Stopp'
+$knappLukk.AccessibleName = (L 'Close to tray'); $knappStopp.AccessibleName = (L 'Stop')
+$knappInnst = Ny-Knapp ([string][char]0x2699) '#0b0a12' '#222035' '#9b98b0' $false; $knappInnst.Font = New-Object Drawing.Font('Segoe UI Symbol', [single]11); $knappInnst.AccessibleName = (L 'Settings'); $knappInnst.Add_Click({ Vis-Innstillinger })
 $script:valg = @()
 $tt = New-Object Windows.Forms.ToolTip
 $valgKnapper = @(1..4 | ForEach-Object { $vk = Ny-Knapp 'valg' '#26233a' '#322f4a' '#ecebf3' $false; $vk.TextAlign = 'MiddleLeft'; $vk.UseMnemonic = $false; $vk.AutoEllipsis = $true; $vk.Padding = New-Object Windows.Forms.Padding(12, 0, 0, 0); $vk.Add_Click({ param($snd, $ev) if ($script:jobb) { return }; $inn.Text = "$($script:sporring): $($snd.Text)"; Send-Spørsmål $(if ($script:kallModus -eq 'start') { 'start' } else { 'spor' }) }); $vk })
-foreach ($fk in @($knappSkjerm, $knappPause, $knappStopp, $knapp, $knappLukk) + $valgKnapper) {   # synlig fokusring (aksentfarge)
+foreach ($fk in @($knappSkjerm, $knappPause, $knappStopp, $knapp, $knappLukk, $knappInnst) + $valgKnapper) {   # synlig fokusring (aksentfarge)
     $fk.Add_GotFocus({ param($snd, $ev) $snd.FlatAppearance.BorderColor = $cAksent; $snd.FlatAppearance.BorderSize = 2 })
     $fk.Add_LostFocus({ param($snd, $ev) $snd.FlatAppearance.BorderSize = 0 })
 }
 $bokInn.Add_Paint({ param($snd, $ev) if ($inn.Focused) { $pn = New-Object Drawing.Pen($cAksent, 2); $ev.Graphics.DrawRectangle($pn, 1, 1, $snd.Width - 3, $snd.Height - 3); $pn.Dispose() } })
 $inn.Add_GotFocus({ $bokInn.Invalidate() }); $inn.Add_LostFocus({ $bokInn.Invalidate() })
-$panel = @($lblSer, $bokSvar, $bokInn, $lblTips, $knappSkjerm, $knappPause, $knappStopp, $knapp, $knappLukk) + $valgKnapper
+$panel = @($lblSer, $bokSvar, $bokInn, $lblTips, $knappSkjerm, $knappPause, $knappStopp, $knapp, $knappLukk, $knappInnst) + $valgKnapper
 $form.Controls.AddRange($panel)
-$svar.AccessibleName = 'Svar fra Bindy'; $inn.AccessibleName = 'Spørsmål til Bindy'; $knappSkjerm.AccessibleName = 'Skjerm: bytt mellom vindu, alle og av'; $knappPause.AccessibleName = 'Pause'; $knapp.AccessibleName = 'Veiled meg'
+$svar.AccessibleName = (L 'Answer from Bindy'); $inn.AccessibleName = (L 'Question to Bindy'); $knappSkjerm.AccessibleName = (L 'Screen: switch between window, all and off'); $knappPause.AccessibleName = 'Pause'; $knapp.AccessibleName = (L 'Guide me')
 for ($vi = 0; $vi -lt $valgKnapper.Count; $vi++) { $valgKnapper[$vi].TabIndex = $vi }   # valgene først i tab-rekkefølgen
-$bokInn.TabIndex = 4; $bokSvar.TabStop = $false; $knappSkjerm.TabIndex = 5; $knappPause.TabIndex = 6; $knappStopp.TabIndex = 7; $knapp.TabIndex = 8; $knappLukk.TabIndex = 9
+$bokInn.TabIndex = 4; $bokSvar.TabStop = $false; $knappSkjerm.TabIndex = 5; $knappPause.TabIndex = 6; $knappStopp.TabIndex = 7; $knapp.TabIndex = 8; $knappLukk.TabIndex = 9; $knappInnst.TabIndex = 10
 foreach ($c in $panel) { $c.Visible = $false }
 
 # Plasserer innholdet i det utvidede panelet (8-punkts rutenett) og beregner panelhøyden ($script:panelH).
@@ -1103,8 +1251,9 @@ function Legg-Ut([bool]$harSvar) {
     $svarH = $(if ($harSvar) { [Math]::Min(200, [Math]::Max(64, $linjer * 20 + 28)) } else { 0 })
     $script:svarSynlig = $harSvar
     $ox = ($FormB - $PanelB) / 2 + 16; $oy = 8; $w = $PanelB - 32
-    $lblSer.SetBounds((S ($ox + 38)), (S ($oy + 14)), (S ($w - 38 - 142)), (S 28))
+    $lblSer.SetBounds((S ($ox + 38)), (S ($oy + 14)), (S ($w - 38 - 176)), (S 28))
     $knappLukk.SetBounds((S ($ox + $w - 30)), (S ($oy + 12)), (S 28), (S 28)); Rund-Region $knappLukk (S 8)
+    $knappInnst.SetBounds((S ($ox + $w - 62)), (S ($oy + 12)), (S 28), (S 28)); Rund-Region $knappInnst (S 8)
     $y = $oy + 64
     if ($harSvar) {
         $bokSvar.SetBounds((S $ox), (S $y), (S $w), (S $svarH)); $svar.SetBounds((S 14), (S 10), (S ($w - 28)), (S ($svarH - 20)))
@@ -1148,7 +1297,7 @@ $sfSteg = New-Object Drawing.StringFormat; $sfSteg.Trimming = 'EllipsisWord'
 function Kopi-Aktiv { [bool]($script:kopiTil -and [DateTime]::Now -lt $script:kopiTil) }
 function Sett-Kopiert([string]$t) {
     $k = ($t -replace '\s+', ' ').Trim(); if ($k.Length -gt 46) { $k = $k.Substring(0, 45) + '…' }
-    $script:kopiTekst = "Kopiert til utklippstavlen: «$k»"; $script:kopiTil = [DateTime]::Now.AddSeconds(6)
+    $script:kopiTekst = (L 'Copied to the clipboard: «{0}»' $k); $script:kopiTil = [DateTime]::Now.AddSeconds(6)
     if ($script:modus -eq 'skjult') { Sett-Modus 'pille'; $script:kollapsTid = [DateTime]::Now.AddSeconds(7) } elseif ($script:modus -eq 'pille') { Sett-Modus 'pille' }
     $form.Invalidate()
 }
@@ -1163,18 +1312,18 @@ function Steg-Størrelse {
 }
 function Pille-Tekst {
     if ($script:toastTil -and [DateTime]::Now -lt $script:toastTil) { return $script:toastTekst }
-    if ($script:pause) { return 'Pauset' }
+    if ($script:pause) { return (L 'Paused') }
     if ($script:jobb) { return $script:tenkTekst + (' ·' * ([int]($script:tikk / 3) % 3 + 1)) }
     if ($script:vei -and $script:veiSteg) { return 'Steg: ' + (($(if ($script:veiVis) { $script:veiVis } else { $script:veiSteg })) -replace '\s+', ' ') }
     if (-not $script:vei -and (Kopi-Aktiv)) { return $script:kopiTekst }
-    if ($script:vei) { return 'Veiledning på' }
+    if ($script:vei) { return (L 'Guidance on') }
     return ''
 }
 function Status-Info {
-    if ($script:pause) { return @('Pauset', '#bfa66a') }
-    if ($script:jobb) { return @('Tenker', '#c98b84') }
-    if ($script:vei) { return @('Veiledning', '#7fbf9f') }
-    return @('Klar', '#8a87a3')
+    if ($script:pause) { return @((L 'Paused'), '#bfa66a') }
+    if ($script:jobb) { return @((L 'Thinking'), '#c98b84') }
+    if ($script:vei) { return @((L 'Guidance'), '#7fbf9f') }
+    return @((L 'Ready'), '#8a87a3')
 }
 
 $form.Add_Paint({ param($s, $e) $st = Status-Info; Tegn-Øy $e.Graphics $sc $script:iB $script:iH $script:bob ($script:vei -and -not $script:pause) $script:ring (Pille-Tekst) $st[0] $st[1] })
@@ -1245,14 +1394,14 @@ function Stopp-Alt {
     Stopp-Veiledning $null
     Skjul-Ramme; $peker.Hide()
     $script:musFade = 0
-    $lblSer.Text = 'Stoppet'; Oppdater-Ikon; Sett-Toast 'Stoppet'
+    $lblSer.Text = (L 'Stopped'); Oppdater-Ikon; Sett-Toast (L 'Stopped')
 }
 $knappStopp.Add_Click({ Stopp-Alt })
 # Utklippslista: vises til venstre for øya når musa hviler på bindersen (eller festet i 30 s når Claude anbefaler et utklipp).
 $klippForm = New-Object KlippVindu; $klippForm.BackColor = $cØy; $klippForm.Opacity = 0.97; $klippForm.Padding = New-Object Windows.Forms.Padding((S 6))
 $klippLB = New-Object Windows.Forms.ListBox
 $klippLB.BorderStyle = 'None'; $klippLB.BackColor = $cØy; $klippLB.DrawMode = 'OwnerDrawFixed'; $klippLB.IntegralHeight = $false; $klippLB.Dock = 'Fill'
-$klippLB.ItemHeight = S 30; $klippLB.AccessibleName = 'Utklipp'
+$klippLB.ItemHeight = S 30; $klippLB.AccessibleName = (L 'Clips')
 $klippForm.Controls.Add($klippLB)
 $klippForm.Add_Paint({ param($snd, $ev)   # tynn rund kant, som kortet øverst
     $g = $ev.Graphics; $g.SmoothingMode = 'AntiAlias'
@@ -1278,7 +1427,7 @@ $klippLB.Add_MouseDown({ param($snd, $e)
 function Fyll-Klipp {
     $klippLB.BeginUpdate(); $klippLB.Items.Clear(); $i = 0
     foreach ($k in $script:klipp) { $i++; [void]$klippLB.Items.Add("$i   " + ($k -replace '\s+', ' ')) }
-    [void]$klippLB.Items.Add($(if ($script:klipp.Count) { 'Tøm historikken' } else { 'Ingenting kopiert ennå' }))
+    [void]$klippLB.Items.Add($(if ($script:klipp.Count) { (L 'Clear history') } else { (L 'Nothing copied yet') }))
     $klippLB.EndUpdate()
 }
 function Plasser-Klipp {
@@ -1316,9 +1465,9 @@ function Klipp-Hover {
 # Skjermmodus: 'vindu' (aktivt vindu), 'alle' (alle skjermer) eller 'av' (bare tekst).
 function Sett-Skjerm([string]$modus) {
     $script:skjermModus = $modus
-    $knappSkjerm.Text = @{ vindu = 'Skjerm: vindu'; alle = 'Skjerm: alle'; av = 'Skjerm: av' }[$modus]; $knappSkjerm.AccessibleName = $knappSkjerm.Text
+    $knappSkjerm.Text = @{ vindu = (L 'Screen: window'); alle = (L 'Screen: all'); av = (L 'Screen: off') }[$modus]; $knappSkjerm.AccessibleName = $knappSkjerm.Text
     if ($modus -eq 'av') {
-        $script:jpeg = $null; $script:geom = $null; $script:tittel = ''; $script:alle = $false; $lblSer.Text = 'Bare spørsmål, uten skjerm'
+        $script:jpeg = $null; $script:geom = $null; $script:tittel = ''; $script:alle = $false; $lblSer.Text = (L 'Question only, no screen')
         return
     }
     $f = Fang-Etter $modus
@@ -1328,7 +1477,7 @@ function Sett-Skjerm([string]$modus) {
 function Bruk-Bilde($f) {   # lagrer bildet og viser hva som ses
     $script:jpeg = Til-Jpeg $f.bitmap; $script:geom = @{ L = $f.L; T = $f.T; skala = $f.skala }; $script:tittel = $f.tittel
     $script:alle = ($f.tittel -eq 'alle skjermer'); $script:bW = $f.bitmap.Width; $script:bH = $f.bitmap.Height; $f.bitmap.Dispose()
-    $lblSer.Text = $(if ($f.liten) { 'Vinduet er lite: ser på alle skjermer' } elseif ($script:alle) { 'Ser på alle skjermer' } else { "Ser på: $($f.tittel)" })
+    $lblSer.Text = $(if ($f.liten) { (L 'The window is small: looking at all screens') } elseif ($script:alle) { (L 'Looking at all screens') } else { (L 'Looking at: {0}' $f.tittel) })
 }
 $knappSkjerm.Add_Click({
     $neste = @{ vindu = 'alle'; alle = 'av'; av = 'vindu' }[$script:skjermModus]
@@ -1363,20 +1512,20 @@ function Lim-Inn([int]$i = -1) {
     if (-not $script:klipp.Count) { return }
     if ($i -ge 0) { $script:klippN = [Math]::Min($i, $script:klipp.Count - 1) }
     $t = [string]$script:klipp[$script:klippN]
-    try { $script:klippSist = $t; Sett-Utklipp $t } catch { Sett-Tips 'Utklippstavlen er opptatt'; return }
+    try { $script:klippSist = $t; Sett-Utklipp $t } catch { Sett-Tips (L 'The clipboard is busy'); return }
     Sett-Kopiert $t
     $mål = $script:sistFremme
-    if ($mål -eq [IntPtr]::Zero -or -not [Vin]::IsWindowVisible($mål)) { Sett-Tips 'Kopiert. Trykk Ctrl+V i feltet (fant ikke vinduet du kom fra).'; return }
+    if ($mål -eq [IntPtr]::Zero -or -not [Vin]::IsWindowVisible($mål)) { Sett-Tips (L 'Copied. Press Ctrl+V in the field (could not find the window you came from).'); return }
     $mt = New-Object Text.StringBuilder 256; [void][Vin]::GetWindowText($mål, $mt, 256)
-    if (Sperre-Grunn $mål $mt.ToString()) { Sett-Tips 'Kopiert, men ikke limt inn: dette er et passord- eller bankvindu.'; return }
+    if (Sperre-Grunn $mål $mt.ToString()) { Sett-Tips (L 'Copied but not pasted: this is a password or banking window.'); return }
     [void][Vin]::SetForegroundWindow($mål); Start-Sleep -Milliseconds 200
-    if ([Vin]::GetForegroundWindow() -ne $mål) { Sett-Tips 'Kopiert. Trykk Ctrl+V selv.'; return }
+    if ([Vin]::GetForegroundWindow() -ne $mål) { Sett-Tips (L 'Copied. Press Ctrl+V yourself.'); return }
     $mt2 = New-Object Text.StringBuilder 256; [void][Vin]::GetWindowText([Vin]::GetForegroundWindow(), $mt2, 256)
-    if ([Vin]::GetForegroundWindow() -ne $mål -or $mt2.ToString() -ne $mt.ToString() -or (Sperre-Grunn $mål $mt2.ToString())) { Sett-Tips 'Kopiert, men vinduet endret seg. Trykk Ctrl+V selv.'; return }
+    if ([Vin]::GetForegroundWindow() -ne $mål -or $mt2.ToString() -ne $mt.ToString() -or (Sperre-Grunn $mål $mt2.ToString())) { Sett-Tips (L 'Copied, but the window changed. Press Ctrl+V yourself.'); return }
     $pidM = 0; [void][Vin]::GetWindowThreadProcessId($mål, [ref]$pidM); $pnM = (Get-Process -Id $pidM -ErrorAction SilentlyContinue).ProcessName
-    if ($pnM -match '^(WindowsTerminal|wt|conhost|powershell|pwsh|cmd|alacritty|mintty|wezterm|kitty|herdr|Code|Cursor|Windsurf|devenv|idea64|pycharm64)$') { Sett-Tips 'Kopiert. Terminalvinduer limes ikke inn automatisk: trykk Ctrl+V selv.'; return }
-    if ([Vin]::ErHevet($mål)) { Sett-Tips 'Kopiert. Vinduet kjører som administrator, så Bindy limer ikke inn dit. Trykk Ctrl+V selv.'; return }
-    [Windows.Forms.SendKeys]::SendWait('^v'); $script:anbefalt = $false; Skjul-Klipp; Kopi-Slutt; Sett-Toast 'Limt inn'
+    if ($pnM -match '^(WindowsTerminal|wt|conhost|powershell|pwsh|cmd|alacritty|mintty|wezterm|kitty|herdr|Code|Cursor|Windsurf|devenv|idea64|pycharm64)$') { Sett-Tips (L 'Copied. Terminal windows are not pasted into automatically: press Ctrl+V yourself.'); return }
+    if ([Vin]::ErHevet($mål)) { Sett-Tips (L 'Copied. The window runs as administrator, so Bindy does not paste there. Press Ctrl+V yourself.'); return }
+    [Windows.Forms.SendKeys]::SendWait('^v'); $script:anbefalt = $false; Skjul-Klipp; Kopi-Slutt; Sett-Toast (L 'Pasted')
 }
 function Sett-Utklipp([string]$t) {   # Bindys egne kopier skal ikke havne i Windows utklippshistorikk eller sky-synk
     $do = New-Object Windows.Forms.DataObject; $do.SetText($t)
@@ -1386,7 +1535,7 @@ function Sett-Utklipp([string]$t) {   # Bindys egne kopier skal ikke havne i Win
 function Kopier-Lenke([string]$u) {
     $u = $u.TrimEnd('.', ',', ';', ':', '!', '?')
     if ($u -notmatch '^(?i)https?://') { $u = "https://$u" }
-    try { $script:klippSist = $u; Sett-Utklipp $u; Legg-Klipp $u; Sett-Tips 'Lenke kopiert til utklippstavlen'; Sett-Kopiert $u } catch { Sett-Tips 'Fikk ikke kopiert (utklippstavlen er opptatt)' }
+    try { $script:klippSist = $u; Sett-Utklipp $u; Legg-Klipp $u; Sett-Tips (L 'Link copied to the clipboard'); Sett-Kopiert $u } catch { Sett-Tips (L 'Could not copy (the clipboard is busy)') }
 }
 # Viser svaret ferdig (eller med «skrivemaskin»-effekt hvis $skriv) og kopierer første lenke automatisk.
 function Sett-Svar([string]$tekst, [bool]$skriv) {
@@ -1396,19 +1545,19 @@ function Sett-Svar([string]$tekst, [bool]$skriv) {
     $svar.Text = $(if ($skriv) { '' } else { $tekst })
     $lenker = @(); try { $lenker = $UrlRegexObj.Matches($(if ($tekst.Length -gt 5000) { $tekst.Substring(0, 5000) } else { $tekst })) } catch {}
     if ($lenker.Count -gt 0) {
-        Sett-Tips 'Klikk en lenke i svaret for å kopiere den.'
+        Sett-Tips (L 'Click a link in the answer to copy it.')
     }
 }
 $script:rolig = -not [Windows.Forms.SystemInformation]::UIEffectsEnabled   # Windows «Vis animasjoner» av: ingen hopp, ringer eller skrivemaskin
 function Puls { if (-not $script:rolig) { $script:ring = 1.0 } }
 
 function Oppdater-Ikon {
-    if ($script:pause) { $tray.Icon = $ikonPause; $tray.Text = 'Bindy: PAUSET' }
-    elseif ($script:jobb) { $tray.Icon = $ikonRød; $tray.Text = 'Bindy: sender ...' }
-    elseif ($script:vei) { $tray.Icon = $ikonGrønn; $tray.Text = 'Bindy: VEILEDNING PÅ' }
-    else { $tray.Icon = $ikonNormal; $tray.Text = 'Bindy (Ctrl+Alt+H)' }
-    $stoppKnapp.Enabled = [bool]($script:vei -or $script:jobb); $nesteKnapp.Enabled = [bool]$script:vei; $knapp.Text = $(if ($script:vei) { "Neste steg" } else { "Veiled meg" }); $knapp.AccessibleName = $knapp.Text
-    $knappPause.Text = $(if ($script:pause) { 'Fortsett' } else { 'Pause' }); $knappPause.AccessibleName = $knappPause.Text
+    if ($script:pause) { $tray.Icon = $ikonPause; $tray.Text = (L 'Bindy: PAUSED') }
+    elseif ($script:jobb) { $tray.Icon = $ikonRød; $tray.Text = (L 'Bindy: sending ...') }
+    elseif ($script:vei) { $tray.Icon = $ikonGrønn; $tray.Text = (L 'Bindy: GUIDANCE ON') }
+    else { $tray.Icon = $ikonNormal; $tray.Text = "Bindy ($($script:Taster.ask))" }
+    $stoppKnapp.Enabled = [bool]($script:vei -or $script:jobb); $nesteKnapp.Enabled = [bool]$script:vei; $knapp.Text = $(if ($script:vei) { (L 'Next step') } else { (L 'Guide me') }); $knapp.AccessibleName = $knapp.Text
+    $knappPause.Text = $(if ($script:pause) { (L 'Resume') } else { 'Pause' }); $knappPause.AccessibleName = $knappPause.Text
     $knappPause.BackColor = (Farge $(if ($script:pause) { '#4a4026' } else { '#17151f' }))
     $knappPause.ForeColor = (Farge $(if ($script:pause) { '#efe0b4' } else { '#d9d6ee' }))
     $form.Invalidate()
@@ -1421,7 +1570,7 @@ function Sett-Pause([bool]$p) {
     if ($pauseKnapp.Checked -ne $p) { $pauseKnapp.Checked = $p }
     if ($p) { [MuseKrok]::Stopp(); Skjul-Ramme; $peker.Hide(); $script:jpeg = $null; $script:geom = $null; $script:tittel = '' }   # pause: gammelt bilde slettes
     elseif ($script:vei) { $script:veiKlikkTeller = [MuseKrok]::Teller; [MuseKrok]::Start(); $script:veiUtenAkt = Get-Date }
-    Oppdater-Ikon; Sett-Toast $(if ($p) { 'Pauset' } else { 'På igjen' })
+    Oppdater-Ikon; Sett-Toast $(if ($p) { (L 'Paused') } else { (L 'Resumed') })
 }
 
 # Starter Claude på et spørsmål med nåværende bilde (eller uten).
@@ -1432,7 +1581,7 @@ function Kjør-Kall([string]$modus, [string]$q, [string]$modell) {
         $txt = Lag-Spørsmål $q $script:logg $b $h $modus $script:veiSteg ($medBilde -and $script:alle)
         $script:jobb = Start-Claude $txt $(if ($medBilde) { $script:jpeg } else { $null }) $modell
     } catch {
-        $script:jobb = $null; $inn.Enabled = $true; $svar.ForeColor = $cFeil; Sett-Svar "Kunne ikke starte Claude: $_" $false; Oppdater-Ikon; return
+        $script:jobb = $null; $inn.Enabled = $true; $svar.ForeColor = $cFeil; Sett-Svar (L 'Could not start Claude: {0}' $_) $false; Oppdater-Ikon; return
     }
     $script:strømmer = $false
     $script:hopp = 9; Puls; Oppdater-Ikon
@@ -1440,31 +1589,31 @@ function Kjør-Kall([string]$modus, [string]$q, [string]$modell) {
 
 function Send-Spørsmål([string]$modus) {
     if ($script:jobb) { return }
-    if ($script:pause -and $script:skjermModus -ne 'av') { Sett-Toast 'Pauset'; return }
+    if ($script:pause -and $script:skjermModus -ne 'av') { Sett-Toast (L 'Paused'); return }
     if ($modus -eq 'start' -and (-not $script:jpeg -or $script:skjermModus -eq 'av')) {   # veiledning trenger bilde
-        Sett-Skjerm $(if ($script:skjermModus -eq 'alle') { 'alle' } else { 'vindu' }); if (-not $script:jpeg) { Sett-Toast 'Fikk ikke bilde av skjermen, så veiledningen startet ikke.'; return }
+        Sett-Skjerm $(if ($script:skjermModus -eq 'alle') { 'alle' } else { 'vindu' }); if (-not $script:jpeg) { Sett-Toast (L 'Could not capture the screen, so guidance did not start.'); return }
     }
     $script:valg = @(); foreach ($vk in $valgKnapper) { $vk.Visible = $false }
     $q = $inn.Text.Trim()
     if (-not $q -and $modus -eq 'spor') {   # Enter uten tekst: fortsett på det som pågår i stedet for å finne opp et nytt spørsmål
         if ($script:vei -and $script:jpeg) {
-            $script:ståttNote = 'brukeren trykket Enter uten å skrive noe fordi han er usikker på om han gjorde riktig. Vurder skjermen mot steget du ga sist, si kort hva som stemmer eller er feil, og veiled ham videre på det samme målet. Svar STATUS: GJORT, IKKE_GJORT eller FERDIG. '
-            $sg = Ta-Signatur; if ($sg -and -not $sg.blokkert) { $script:veiSjekk = [Math]::Max(0, $script:veiSjekk - 1); Send-Sjekk $sg } else { Sett-Toast 'Fikk ikke sett skjermen akkurat nå.' }
+            $script:ståttNote = 'The user pressed Enter without writing anything because they are unsure whether they did the right thing. Judge the screen against the step you gave last, say briefly what is right or wrong, and guide them on towards the same goal. Answer STATUS: GJORT, IKKE_GJORT or FERDIG. '
+            $sg = Ta-Signatur; if ($sg -and -not $sg.blokkert) { $script:veiSjekk = [Math]::Max(0, $script:veiSjekk - 1); Send-Sjekk $sg } else { Sett-Toast (L 'Could not see the screen right now.') }
             $script:ståttNote = ''; return
         }
         $sist = $script:logg | Select-Object -Last 1
-        if ($sist -and ([DateTime]::Now - $sist.t).TotalMinutes -lt 10) { $q = "Jeg trykket Enter uten å skrive noe. Veiled meg videre på det forrige spørsmålet mitt: «$($sist.q)»" }
+        if ($sist -and ([DateTime]::Now - $sist.t).TotalMinutes -lt 10) { $q = "I pressed Enter without writing anything. Continue guiding me on my previous question: «$($sist.q)»" }
     }
     if (-not $q -and $modus -eq 'start') {   # «Veiled meg» med tomt felt: veiled på spørsmålet du nettopp stilte
         $sist = $script:logg | Select-Object -Last 1
-        if ($sist -and $sist.q -and $sist.q -notmatch '^\(skjermen endret seg\)' -and ([DateTime]::Now - $sist.t).TotalMinutes -lt 30) { $q = ($sist.q -replace '^Jeg trykket Enter uten å skrive noe\. Veiled meg videre på det forrige spørsmålet mitt: «(.*)»$', '$1') }
+        if ($sist -and $sist.q -and $sist.q -notmatch '^\(skjermen endret seg\)' -and ([DateTime]::Now - $sist.t).TotalMinutes -lt 30) { $q = ($sist.q -replace '^I pressed Enter without writing anything\. Continue guiding me on my previous question: «(.*)»$', '$1') }
     }
-    if (-not $q) { $q = $(if ($modus -eq 'start') { 'oppgaven som står i bakgrunnsnotatet' } else { 'Hva gjør jeg nå?' }) }
+    if (-not $q) { $q = $(if ($modus -eq 'start') { 'the task described in the background note' } else { (L 'What do I do now?') }) }
     if ($modus -eq 'start') { Stopp-Veiledning $null; $script:logg.Clear(); $script:veiMål = $q; $script:veiAlle = $script:alle }   # ny veiledning: nytt mål, glemt samtale
     $script:sporring = $q; $script:kallModus = $modus; $script:alleForsøkt = $script:alle
     $script:kallSig = $(if ($script:jpeg) { Ta-Signatur } else { $null })
     Skjul-Ramme; $script:kollapsTid = $null
-    $script:tenkTekst = 'Tenker'; $inn.Text = ''; $inn.Enabled = $false; $lblSer.Text = 'Tenker'
+    $script:tenkTekst = (L 'Thinking'); $inn.Text = ''; $inn.Enabled = $false; $lblSer.Text = (L 'Thinking')
     Kjør-Kall $modus $q $ModellSpør
 }
 
@@ -1472,9 +1621,9 @@ function Send-Spørsmål([string]$modus) {
 function Prøv-Igjen-Alle {
     $f = Fang-Alle
     if (-not $f.ok) { Sett-Svar $f.grunn $false; return $false }
-    Bruk-Bilde $f; $lblSer.Text = 'Ser på alle skjermer'
+    Bruk-Bilde $f; $lblSer.Text = (L 'Looking at all screens')
     $script:alleForsøkt = $true; if ($script:vei) { $script:veiAlle = $true }
-    $script:tenkTekst = 'Ser på alle skjermer'
+    $script:tenkTekst = (L 'Looking at all screens')
     Kjør-Kall $script:kallModus $script:sporring $ModellSpør
     return $true
 }
@@ -1508,14 +1657,14 @@ function Stopp-Veiledning([string]$grunn) {
 # Sender et nytt bilde til Claude fordi skjermen har endret seg. $sig er signaturen vi målte rett før.
 function Send-Sjekk($sig, [string]$modell = $ModellSjekk) {
     $stille = $script:stilleSjekk; $script:stilleSjekk = $false   # settes på nytt rett før kallet, så det aldri henger igjen
-    if ($script:veiSjekk -ge $MaksSjekker) { Stopp-Veiledning "Veiledningen stoppet etter $MaksSjekker sjekker."; return }
+    if ($script:veiSjekk -ge $MaksSjekker) { Stopp-Veiledning (L 'Guidance stopped after {0} checks.' $MaksSjekker); return }
     $f = Fang-Etter $(if ($script:veiAlle) { 'alle' } else { 'vindu' })
     if (-not $f.ok) { return }
     Bruk-Bilde $f
     if (-not $stille) { $script:veiSjekk++ }   # stille sjekker (uten klikk) teller ikke mot taket
     $script:veiKlikkTid = $null; $script:veiSist = Get-Date
     $script:sporring = '(skjermen endret seg)'; $script:kallModus = 'sjekk'; $script:kallSig = $sig; $script:alleForsøkt = $script:alle
-    $script:tenkTekst = 'Sjekker'
+    $script:tenkTekst = (L 'Checking')
     $script:stilleSjekk = $stille
     Kjør-Kall 'sjekk' '' $modell
 }
@@ -1525,7 +1674,7 @@ function Send-Sjekk($sig, [string]$modell = $ModellSjekk) {
 function Følg-Med {
     if (-not $script:vei -or $script:jobb -or $script:pause) { return }
     $nå = Get-Date
-    if (($nå - $script:veiUtenAkt).TotalMinutes -gt $StoppEtterMin) { Stopp-Veiledning "Ingen aktivitet i $StoppEtterMin minutter. Veiledningen er stoppet."; return }
+    if (($nå - $script:veiUtenAkt).TotalMinutes -gt $StoppEtterMin) { Stopp-Veiledning (L 'No activity for {0} minutes. Guidance stopped.' $StoppEtterMin); return }
     $sig = Ta-Signatur
     if (-not $sig) { return }
     if ($sig.blokkert) { return }   # sperret vindu: jeg ser ikke på det
@@ -1542,17 +1691,17 @@ function Følg-Med {
         $iMål = $script:mål -and $script:veiKlikkPos.X -ge $script:mål[0] -and $script:veiKlikkPos.X -le $script:mål[2] -and $script:veiKlikkPos.Y -ge $script:mål[1] -and $script:veiKlikkPos.Y -le $script:mål[3]
         if (($v -ge 1.0 -and $endret -and $rolig) -or ($iMål -and $v -ge 0.5) -or ($v -ge 5 -and $endret)) {
             $trigger = $true; $klikk = $true
-            $note = $(if ($iMål) { 'brukeren klikket INNE i det markerte målet for steget. ' } else { 'brukeren klikket UTENFOR det markerte målet for steget (kanskje et annet sted som også virker). ' })
+            $note = $(if ($iMål) { 'the user clicked INSIDE the marked target of the step. ' } else { 'the user clicked OUTSIDE the marked target of the step (perhaps another place that also works). ' })
         }
         if ($v -gt 8) { $script:veiKlikkTid = $null }   # klikk uten virkning
     }
     if ($endret) {   # skjermen har endret seg uten klikk (for eksempel et nytt vindu): vent til den har roet seg
         if ($script:veiPrev -and (Sig-Diff $sig $script:veiPrev) -le 4) { $script:veiStabil++ } else { $script:veiStabil = 0 }
         $script:veiPrev = $sig; $script:veiUtenAkt = $nå
-        if ($script:veiStabil -ge 2 -and $diff -gt 9 -and -not $script:veiKlikkTid -and -not $trigger) { $trigger = $true; $note = 'ingen klikk registrert; skjermen endret seg av seg selv. ' }
+        if ($script:veiStabil -ge 2 -and $diff -gt 9 -and -not $script:veiKlikkTid -and -not $trigger) { $trigger = $true; $note = 'no click registered; the screen changed on its own. ' }
     } else { $script:veiStabil = 0; $script:veiPrev = $null }
     if (-not $trigger -and -not $script:veiKlikkTid -and -not $script:veiHjelpt -and $script:veiSteg -and ($nå - $script:veiSist).TotalSeconds -ge 35) {   # brukeren står stille: steget var nok uklart
-        $script:veiHjelpt = $true; $script:ståttNote = 'brukeren har stått stille i over 30 sekunder uten å klikke, så steget var nok uklart. Forklar det enklere, ÉN handling, og pek helt presist (MARKER og PEKER). Svar STATUS: IKKE_GJORT. '
+        $script:veiHjelpt = $true; $script:ståttNote = 'the user has stood still for over 30 seconds without clicking, so the step was probably unclear. Explain it more simply, ONE action, and point precisely (MARKER and PEKER). Answer STATUS: IKKE_GJORT. '
         Send-Sjekk $sig $ModellSjekk; $script:ståttNote = ''; return
     }
     if ($trigger -and ($nå - $script:veiSist).TotalSeconds -ge 1) {
@@ -1563,11 +1712,11 @@ function Følg-Med {
 
 # «Neste steg»: brukeren sier at steget er gjort (eller vil hoppe over det), og Bindy gir neste. Knapp i panelet, tray-menyen og Ctrl+Alt+N.
 function Neste-Steg {
-    if (-not $script:vei) { Sett-Toast 'Ingen veiledning pågår'; return }
-    if ($script:jobb) { Sett-Toast 'Bindy tenker. Prøv igjen om et øyeblikk.'; return }
-    if ($script:pause) { Sett-Toast 'Pauset'; return }
-    $sg = Ta-Signatur; if (-not $sg -or $sg.blokkert) { Sett-Toast 'Fikk ikke sett skjermen akkurat nå.'; return }
-    $script:ståttNote = 'brukeren trykket «Neste steg»: regn steget du ga sist som gjort (eller hopp over det) og gi det NESTE steget med MARKER og PEKER. Svar STATUS: GJORT, eller FERDIG hvis målet er nådd. '
+    if (-not $script:vei) { Sett-Toast (L 'No guidance in progress'); return }
+    if ($script:jobb) { Sett-Toast (L 'Bindy is thinking. Try again in a moment.'); return }
+    if ($script:pause) { Sett-Toast (L 'Paused'); return }
+    $sg = Ta-Signatur; if (-not $sg -or $sg.blokkert) { Sett-Toast (L 'Could not see the screen right now.'); return }
+    $script:ståttNote = 'the user pressed «Next step»: count the step you gave last as done (or skip it) and give the NEXT step with MARKER and PEKER. Answer STATUS: GJORT, or FERDIG if the goal is reached. '
     $script:veiSjekk = [Math]::Max(0, $script:veiSjekk - 1); $script:veiHjelpt = $false
     Send-Sjekk $sg $ModellSpør; $script:ståttNote = ''
 }
@@ -1576,30 +1725,148 @@ function Neste-Steg {
 
 $ikonNormal = Lag-Ikon (Farge '#b4b0c9'); $ikonRød = Lag-Ikon $cFeil; $ikonGrønn = Lag-Ikon $cOk; $ikonPause = Lag-Ikon (Farge '#6b6880')
 $tray = New-Object Windows.Forms.NotifyIcon
-$tray.Icon = $ikonNormal; $tray.Text = 'Bindy (Ctrl+Alt+H)'; $tray.Visible = $true
+$tray.Icon = $ikonNormal; $tray.Text = "Bindy ($($script:Taster.ask))"; $tray.Visible = $true
 $meny = New-Object Windows.Forms.ContextMenuStrip
-$pauseKnapp = New-Object Windows.Forms.ToolStripMenuItem('Pause (Ctrl+Alt+P)')
+$pauseKnapp = New-Object Windows.Forms.ToolStripMenuItem((L 'Pause'))
 $pauseKnapp.CheckOnClick = $true
 $pauseKnapp.Add_CheckedChanged({ Sett-Pause $pauseKnapp.Checked })
-$nesteKnapp = New-Object Windows.Forms.ToolStripMenuItem('Neste steg (Ctrl+Alt+N)'); $nesteKnapp.Enabled = $false; $nesteKnapp.Add_Click({ Neste-Steg })
-$stoppKnapp = New-Object Windows.Forms.ToolStripMenuItem('Stopp (avbryt og stopp veiledning)')
+$nesteKnapp = New-Object Windows.Forms.ToolStripMenuItem((L 'Next step (Ctrl+Alt+N)')); $nesteKnapp.Enabled = $false; $nesteKnapp.Add_Click({ Neste-Steg })
+$stoppKnapp = New-Object Windows.Forms.ToolStripMenuItem((L 'Stop (cancel and stop guidance)'))
 $stoppKnapp.Enabled = $false
 $stoppKnapp.Add_Click({ Stopp-Alt })
-$glemKnapp = New-Object Windows.Forms.ToolStripMenuItem('Glem oppgaven (nytt mål)')
-$glemKnapp.Add_Click({ Stopp-Veiledning $null; Arkiver-Oppgave; Skjul-Mentor; $tray.ShowBalloonTip(2500, 'Bindy', 'Oppgaven og samtalen er glemt.', 'Info') })
-$apneKnapp = New-Object Windows.Forms.ToolStripMenuItem('Åpne Bindy (spør uten skjerm)')
+$glemKnapp = New-Object Windows.Forms.ToolStripMenuItem((L 'Forget the task (new goal)'))
+$glemKnapp.Add_Click({ Stopp-Veiledning $null; Arkiver-Oppgave; Skjul-Mentor; $tray.ShowBalloonTip(2500, 'Bindy', (L 'The task and conversation are forgotten.'), 'Info') })
+$apneKnapp = New-Object Windows.Forms.ToolStripMenuItem((L 'Open Bindy (ask without screen)'))
+$innstKnapp = New-Object Windows.Forms.ToolStripMenuItem((L 'Settings…')); $innstKnapp.Add_Click({ Vis-Innstillinger })
 $apneKnapp.Add_Click({ $script:fokusNår = $true; Sett-Modus 'full'; Puls })
-$tomKnapp = New-Object Windows.Forms.ToolStripMenuItem('Tøm utklipp'); $tomKnapp.Add_Click({ Tøm-Klipp })
-$delKnapp = New-Object Windows.Forms.ToolStripMenuItem('Del utklipp med Claude'); $delKnapp.CheckOnClick = $true; $delKnapp.Checked = $script:delKlipp
+$tomKnapp = New-Object Windows.Forms.ToolStripMenuItem((L 'Clear clips')); $tomKnapp.Add_Click({ Tøm-Klipp })
+$delKnapp = New-Object Windows.Forms.ToolStripMenuItem((L 'Share clips with Claude')); $delKnapp.CheckOnClick = $true; $delKnapp.Checked = $script:delKlipp
 $delKnapp.Add_CheckedChanged({ $script:delKlipp = $delKnapp.Checked; try { if ($script:delKlipp) { New-Item -ItemType File -Force $script:delFil | Out-Null } else { Remove-Item $script:delFil -ErrorAction SilentlyContinue } } catch {} })
-$musKnapp = New-Object Windows.Forms.ToolStripMenuItem('Musefølger'); $musKnapp.CheckOnClick = $true; $musKnapp.Checked = $script:musPå
+$musKnapp = New-Object Windows.Forms.ToolStripMenuItem((L 'Follow mouse')); $musKnapp.CheckOnClick = $true; $musKnapp.Checked = $script:musPå
 $musKnapp.Add_CheckedChanged({ $script:musPå = $musKnapp.Checked; try { if ($script:musPå) { Remove-Item $script:musFil -ErrorAction SilentlyContinue } else { New-Item -ItemType File -Force $script:musFil | Out-Null } } catch {} })
 $apneKnapp.Font = New-Object Drawing.Font("Segoe UI", [single]9.75, [Drawing.FontStyle]::Bold)
-foreach ($mi in @($apneKnapp, '-', $musKnapp, $delKnapp, $tomKnapp, '-', $nesteKnapp, $pauseKnapp, $stoppKnapp, $glemKnapp, '-')) { if ($mi -eq '-') { [void]$meny.Items.Add((New-Object Windows.Forms.ToolStripSeparator)) } else { [void]$meny.Items.Add($mi) } }
-[void]$meny.Items.Add('Avslutt Bindy', $null, { $tray.Visible = $false; Stopp-Veiledning $null; $form.Hide(); [Windows.Forms.Application]::Exit() })
+foreach ($mi in @($apneKnapp, $innstKnapp, '-', $musKnapp, $delKnapp, $tomKnapp, '-', $nesteKnapp, $pauseKnapp, $stoppKnapp, $glemKnapp, '-')) { if ($mi -eq '-') { [void]$meny.Items.Add((New-Object Windows.Forms.ToolStripSeparator)) } else { [void]$meny.Items.Add($mi) } }
+[void]$meny.Items.Add((L 'Quit Bindy'), $null, { $tray.Visible = $false; Stopp-Veiledning $null; $form.Hide(); [Windows.Forms.Application]::Exit() })
 foreach ($it in $meny.Items) { if ($it -is [Windows.Forms.ToolStripMenuItem]) { $it.Padding = New-Object Windows.Forms.Padding(0, 3, 0, 3) } }
 $meny.Renderer = New-Object MorkMeny; $meny.Add_Opening({ param($s) [MorkMeny]::Rund($s) }); $meny.BackColor = [Drawing.Color]::FromArgb(36, 36, 42); $meny.ForeColor = [Drawing.Color]::FromArgb(242, 242, 245); $meny.Font = New-Object Drawing.Font("Segoe UI", [single]9.75); $meny.Padding = New-Object Windows.Forms.Padding(0, 5, 0, 5); $meny.ShowImageMargin = $false; $meny.ShowCheckMargin = $true
 $tray.ContextMenuStrip = $meny
+# Tekster som viser hurtigtastene (menyen, tray-teksten og hjelpelinja). Kalles ved oppstart og når tastene endres i Settings.
+function Sett-Tastetekster {
+    $pauseKnapp.Text = "$(L 'Pause') ($($script:Taster.pause))"; $nesteKnapp.Text = "$(L 'Next step') ($($script:Taster.nextStep))"
+    $script:TipsStandard = (L 'Enter asks  ·  Ctrl+Enter guides  ·  {0} next step  ·  Esc closes  ·  {1} pause' $script:Taster.nextStep $script:Taster.pause)
+    if (-not $script:tipsTil) { $lblTips.Text = $script:TipsStandard }
+    Oppdater-Ikon
+}
+Sett-Tastetekster
+
+# ---------------------------------------------------------------- Settings: språk, hurtigtaster og valg samlet i ett vindu
+$script:innstForm = $null; $script:fangerTast = $null
+function Tast-Fjern-Alle { foreach ($n in $script:TastId.Keys) { $hk.Fjern($script:TastId[$n]) } }
+function Tast-Registrer-Alle { foreach ($n in @($script:TastId.Keys)) { [void](Registrer-Taster $n) } }
+function Start-På-Nytt {   # starter en ny Bindy etter noen sekunder og avslutter denne
+    $exe = [Diagnostics.Process]::GetCurrentProcess().MainModule.FileName
+    if ($exe -notmatch 'BindyStart\.exe$') { return $false }
+    Start-Process powershell -WindowStyle Hidden -ArgumentList '-NoProfile', '-Command', "Start-Sleep 3; Start-Process '$exe'"
+    $tray.Visible = $false; Stopp-Veiledning $null; $form.Hide(); [Windows.Forms.Application]::Exit()
+    return $true
+}
+function Autostart-På { [bool](Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'Bindy' -ErrorAction SilentlyContinue) }
+function Sett-Autostart([bool]$på) {
+    $rk = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+    try {
+        if ($på) { $exe = [Diagnostics.Process]::GetCurrentProcess().MainModule.FileName; Set-ItemProperty $rk -Name 'Bindy' -Value "`"$exe`"" } else { Remove-ItemProperty $rk -Name 'Bindy' -ErrorAction SilentlyContinue }
+    } catch {}
+}
+function Tast-Tekst([Windows.Forms.KeyEventArgs]$e) {   # tastetrykk til «Ctrl+Alt+H», eller $null hvis det ikke er en gyldig hurtigtast
+    $k = $e.KeyCode.ToString(); if (-not ($e.Control -or $e.Alt)) { return $null }
+    $t = $null
+    if ($k -match '^[A-Z]$') { $t = $k } elseif ($k -match '^D([0-9])$') { $t = $Matches[1] } elseif ($k -match '^F([1-9]|1[0-9]|2[0-4])$') { $t = $k }
+    if (-not $t) { return $null }
+    return (@($(if ($e.Control) { 'Ctrl' }), $(if ($e.Alt) { 'Alt' }), $(if ($e.Shift) { 'Shift' })) | Where-Object { $_ }) -join '+' | ForEach-Object { "$_+$t" }
+}
+function Vis-Innstillinger {
+    if ($script:innstForm -and -not $script:innstForm.IsDisposed) { $script:innstForm.Activate(); return }
+    $w = 460; $script:innstForm = New-Object Windows.Forms.Form
+    $script:innstForm.FormBorderStyle = 'None'; $script:innstForm.StartPosition = 'CenterScreen'; $script:innstForm.ShowInTaskbar = $true; $script:innstForm.TopMost = $true; $script:innstForm.KeyPreview = $true
+    $script:innstForm.BackColor = $cFlate; $script:innstForm.ForeColor = $cTekst; $script:innstForm.Font = $fTekst; $script:innstForm.Text = (L 'Settings'); $script:innstForm.AccessibleName = (L 'Settings')
+    $script:iMeld = $null
+    $lab = { param($tekst, $x, $y, $bredde, $skrift, $farge) $l = New-Object Windows.Forms.Label; $l.Text = $tekst; $l.AutoSize = $false; $l.SetBounds((S $x), (S $y), (S $bredde), (S 22)); $l.Font = $skrift; $l.ForeColor = $farge; $l.BackColor = $cFlate; $script:innstForm.Controls.Add($l); $l }
+    $y = 18
+    [void](& $lab (L 'Settings') 24 $y 300 (New-Object Drawing.Font($Familie, 15, [Drawing.FontStyle]::Bold)) $cTekst); $script:innstForm.Controls[0].Height = S 30
+    $kLukk = Ny-Knapp ([string][char]0x2715) '#14121e' '#222035' '#9b98b0' $false; $kLukk.SetBounds((S ($w - 48)), (S 16), (S 30), (S 30)); $kLukk.AccessibleName = (L 'Close'); $kLukk.Add_Click({ $script:innstForm.Close() }); $script:innstForm.Controls.Add($kLukk)
+    $y += 44
+    # --- Språk
+    [void](& $lab (L 'Language') 24 $y 200 $fKnappFet $cAksent); $y += 28
+    $script:iEn = Ny-Knapp 'English' '#17151f' '#222035' '#d9d6ee' $false; $script:iNo = Ny-Knapp 'Norsk' '#17151f' '#222035' '#d9d6ee' $false
+    $script:iEn.SetBounds((S 24), (S $y), (S 120), (S 32)); $script:iNo.SetBounds((S 152), (S $y), (S 120), (S 32)); $script:innstForm.Controls.AddRange(@($script:iEn, $script:iNo))
+    $script:iStart = Ny-Knapp (L 'Restart now') '#8f87c2' '#a39cd3' '#14121d' $true; $script:iStart.SetBounds((S 288), (S $y), (S 148), (S 32)); $script:iStart.Visible = $false; $script:innstForm.Controls.Add($script:iStart)
+    $script:iMerk = { $a = $script:Språk -eq 'en'; foreach ($p in @(@($script:iEn, $a), @($script:iNo, -not $a))) { $p[0].BackColor = (Farge $(if ($p[1]) { '#8f87c2' } else { '#17151f' })); $p[0].ForeColor = (Farge $(if ($p[1]) { '#14121d' } else { '#d9d6ee' })) } }
+    & $script:iMerk; $startSpråk = $script:Språk
+    $script:iVelg = { param($kode) $script:Språk = $kode; Lagre-Innst; & $script:iMerk; $script:iStart.Visible = ($kode -ne $startSpråk); $script:iHint.Text = $(if ($kode -ne $startSpråk) { (L 'Takes effect after Bindy restarts.') } else { '' }) }
+    $script:iEn.Add_Click({ & $script:iVelg 'en' }); $script:iNo.Add_Click({ & $script:iVelg 'no' })
+    $script:iStart.Add_Click({ if (-not (Start-På-Nytt)) { $script:iHint.Text = (L 'Please restart Bindy yourself to apply the language.') } })
+    $y += 38; $script:iHint = & $lab '' 24 $y 412 $fSmå $cDempet; $y += 30
+    # --- Generelt
+    [void](& $lab (L 'General') 24 $y 200 $fKnappFet $cAksent); $y += 28
+    $bryter = {
+        param($tekst, $på, $handling)
+        $c = New-Object Windows.Forms.CheckBox; $c.Text = $tekst; $c.Checked = $på; $c.FlatStyle = 'Flat'; $c.ForeColor = $cTekst; $c.BackColor = $cFlate; $c.Font = $fTekst; $c.AutoSize = $false; $c.SetBounds((S 24), (S $script:yy), (S 412), (S 26)); $c.Cursor = 'Hand'
+        $c.Add_CheckedChanged($handling); $script:innstForm.Controls.Add($c); $script:yy += 30; $c
+    }
+    $script:yy = $y
+    [void](& $bryter (L 'Follow the mouse with the binder') $script:musPå { param($snd, $ev) $musKnapp.Checked = $snd.Checked })
+    [void](& $bryter (L 'Share clips with Claude') $script:delKlipp { param($snd, $ev) $delKnapp.Checked = $snd.Checked })
+    [void](& $bryter (L 'Start Bindy with Windows') (Autostart-På) { param($snd, $ev) Sett-Autostart $snd.Checked })
+    $y = $script:yy + 8
+    # --- Hurtigtaster
+    [void](& $lab (L 'Hotkeys') 24 $y 200 $fKnappFet $cAksent); $y += 28
+    $rader = @(@('ask', (L 'Ask (with a screenshot of the window)')), @('askNoScreen', (L 'Ask without a screenshot')), @('pause', (L 'Pause or resume')), @('nextStep', (L 'Next guidance step')))
+    $script:iTast = @{}
+    foreach ($r in $rader) {
+        [void](& $lab $r[1] 24 ($y + 5) 290 $fTekst $cTekst)
+        $b = Ny-Knapp $script:Taster[$r[0]] '#17151f' '#222035' '#d9d6ee' $false; $b.SetBounds((S 320), (S $y), (S 116), (S 32)); $b.Tag = $r[0]; $b.AccessibleName = $r[1]
+        $b.Add_Click({ param($snd, $ev)
+            if ($script:fangerTast) { return }
+            $script:fangerTast = $snd.Tag; $snd.Text = (L 'Press keys…'); $snd.ForeColor = $cAksent; Tast-Fjern-Alle   # ingen globale taster mens du velger ny
+            $script:iMeld.Text = (L 'Use Ctrl or Alt plus a letter, number or F-key. Esc cancels.'); $script:innstForm.Focus()
+        })
+        $script:iTast[$r[0]] = $b; $script:innstForm.Controls.Add($b); $y += 38
+    }
+    $script:iMeld = & $lab '' 24 $y 412 $fSmå $cDempet; $y += 26
+    $script:iSlutt = {   # ferdig med å velge: alle hurtigtaster tilbake, og knappene viser gjeldende kombinasjon
+        $script:fangerTast = $null; Tast-Registrer-Alle
+        foreach ($n in $script:iTast.Keys) { $script:iTast[$n].Text = $script:Taster[$n]; $script:iTast[$n].ForeColor = (Farge '#d9d6ee') }
+        Sett-Tastetekster
+    }
+    $script:innstForm.Add_KeyDown({ param($snd, $e)
+        if (-not $script:fangerTast) { if ($e.KeyCode -eq 'Escape') { $script:innstForm.Close() }; return }
+        $e.SuppressKeyPress = $true; $e.Handled = $true
+        if ($e.KeyCode -eq 'Escape') { $script:iMeld.Text = ''; & $script:iSlutt; return }
+        if ($e.KeyCode -in 'ControlKey', 'ShiftKey', 'Menu', 'LWin', 'RWin') { return }
+        $ny = Tast-Tekst $e; if (-not $ny) { return }   # ugyldig kombinasjon: vent på en ny
+        $navn = $script:fangerTast
+        $annen = $script:Taster.Keys | Where-Object { $_ -ne $navn -and $script:Taster[$_] -eq $ny }
+        if ($annen) { $script:iMeld.Text = (L 'That combination is already used for another action.'); & $script:iSlutt; return }
+        $gammel = $script:Taster[$navn]; $script:Taster[$navn] = $ny; $script:fangerTast = $null
+        if (-not (Registrer-Taster $navn)) { $script:Taster[$navn] = $gammel; $script:iMeld.Text = (L 'That combination is in use by another app.') } else { $script:iMeld.Text = ''; Lagre-Innst }
+        $hk.Fjern($script:TastId[$navn]); & $script:iSlutt
+    })
+    $tilbake = Ny-Knapp (L 'Reset hotkeys') '#17151f' '#222035' '#d9d6ee' $false; $tilbake.SetBounds((S 24), (S $y), (S 170), (S 32))
+    $tilbake.Add_Click({ if ($script:fangerTast) { return }; Tast-Fjern-Alle; foreach ($n in @($script:StandardTaster.Keys)) { $script:Taster[$n] = $script:StandardTaster[$n] }; Lagre-Innst; & $script:iSlutt; $script:iMeld.Text = '' })
+    $script:innstForm.Controls.Add($tilbake); $y += 44
+    # --- Faste taster i skrivefeltet
+    [void](& $lab (L 'In the input box') 24 $y 300 $fKnappFet $cAksent); $y += 28
+    foreach ($tx in @((L 'Enter: ask'), (L 'Ctrl+Enter: guide me'), (L 'Shift+Enter: new line'), (L 'Esc: close'))) { [void](& $lab $tx 24 $y 412 $fSmå $cDempet); $y += 20 }
+    $y += 14
+    $script:innstForm.ClientSize = New-Object Drawing.Size((S $w), (S $y))
+    $script:innstForm.Add_Shown({ Rund-Region $script:innstForm (S 18) })
+    $script:innstForm.Add_Paint({ param($snd, $ev) $g = $ev.Graphics; $g.SmoothingMode = 'AntiAlias'; $p = Rund-Sti 0.75 0.75 ($snd.Width - 1.5) ($snd.Height - 1.5) (S 18); $pn = New-Object Drawing.Pen((Farge '#35314f'), 1.5); $g.DrawPath($pn, $p); $pn.Dispose(); $p.Dispose() })
+    $dra = $null   # dra i vinduet for å flytte det
+    $script:innstForm.Add_MouseDown({ param($snd, $e) if ($e.Button -eq 'Left') { $script:innstDra = [Windows.Forms.Cursor]::Position; $script:innstDraL = $script:innstForm.Location } })
+    $script:innstForm.Add_MouseMove({ param($snd, $e) if ($e.Button -eq 'Left' -and $script:innstDra) { $c = [Windows.Forms.Cursor]::Position; $script:innstForm.Location = New-Object Drawing.Point(($script:innstDraL.X + $c.X - $script:innstDra.X), ($script:innstDraL.Y + $c.Y - $script:innstDra.Y)) } })
+    $script:innstForm.Add_FormClosed({ if ($script:fangerTast) { $script:fangerTast = $null; Tast-Registrer-Alle; Sett-Tastetekster }; $script:innstForm = $null })
+    $script:innstForm.Show(); $script:innstForm.Activate()
+}
 $tray.Add_DoubleClick({ $script:fokusNår = $true; Sett-Modus 'full'; Puls })
 $tray.Add_MouseClick({ param($s, $e) if ($e.Button -eq 'Left') { Sett-Pause (-not $script:pause) } })   # venstreklikk på ikonet = pause/fortsett
 foreach ($f in @($form, $ramme, $peker, $overlegg, $klippForm, $mus)) { [void][Vin]::Ekskluder($f) }   # Bindys vinduer kommer ikke med i skjermbilder, så ingenting skjules (ingen flimring)
@@ -1617,7 +1884,7 @@ function Behandle-Svar($j) {
         }
         $stille = $script:stilleSjekk; $script:stilleSjekk = $false
         if ($stille -and $script:kallModus -eq 'sjekk' -and $d.status -eq 'IKKE_GJORT') { $script:veiSig = $script:kallSig; $script:veiSist = Get-Date; $script:jobb = $null; $script:bob = 0; Oppdater-Ikon; return }   # uten klikk: et «ikke gjort» vises ikke
-        if (-not $d.tekst -and $d.behov) { $d.tekst = 'Jeg trenger å se mer enn dette vinduet, men fikk ikke tatt bilde av alle skjermene.' }
+        if (-not $d.tekst -and $d.behov) { $d.tekst = (L 'I need to see more than this window, but could not capture all screens.') }
         [void]$script:logg.Add(@{ q = $script:sporring; a = $d.tekst; t = Get-Date })
         $svar.ForeColor = $cTekst; Sett-Svar $d.tekst (-not $script:strømmer)
         $script:valg = @($d.valg); if ($script:valg.Count) { $script:fokusNår = $true; Sett-Modus 'full'; Legg-Ut $true; $script:iHm = $script:panelH; Vis-Innhold }
@@ -1626,7 +1893,7 @@ function Behandle-Svar($j) {
             switch ($d.status) {
                 'GJORT'  { $script:veiHjelpt = $false; if ($script:veiSteg) { [void]$script:veiGjort.Add($script:veiSteg) }; $script:veiSteg = $d.tekst; $script:veiVis = $d.tekst; $script:veiIkke = $false }
                 'STEG'   { $script:veiSteg = $d.tekst; $script:veiVis = $d.tekst; $script:veiIkke = $false }
-                'FERDIG' { if ($script:veiSteg) { [void]$script:veiGjort.Add($script:veiSteg) }; $script:veiSteg = 'Ferdig.'; $script:veiVis = 'Ferdig.'; $script:veiIkke = $false; $ferdig = $true }
+                'FERDIG' { if ($script:veiSteg) { [void]$script:veiGjort.Add($script:veiSteg) }; $script:veiSteg = (L 'Done.'); $script:veiVis = (L 'Done.'); $script:veiIkke = $false; $ferdig = $true }
                 default  { if (-not $script:veiSteg) { $script:veiSteg = $d.tekst; $script:veiVis = $d.tekst } else { $script:veiVis = $d.tekst; $script:veiIkke = $true } }   # IKKE_GJORT: samme steg står, men kortet viser hva som mangler
             }
             Skriv-Fremdrift
@@ -1635,11 +1902,11 @@ function Behandle-Svar($j) {
         if (($d.boks -or $d.former.Count) -and $script:geom) { Vis-Mål $d.boks $d.former $d.peker }
         if ($d.skriv) { Legg-Klipp $d.skriv; $script:anbefalt = $true }   # Claude foreslår tekst: den havner øverst i utklippet, brukeren trykker «Lim inn»
         elseif ($d.lim -and $d.lim -le $script:klippSendt.Count) { $ki = $script:klipp.IndexOf($script:klippSendt[$d.lim - 1]); if ($ki -ge 0) { $script:klippN = $ki; $script:anbefalt = $true } }
-        if ($script:anbefalt) { Vis-Klipp $true; Sett-Tips 'Bindy anbefaler et utklipp: klikk det i lista ved bindersen.' }
-    } catch { $svar.ForeColor = $cFeil; Sett-Svar "Noe gikk galt: $_" $false }
+        if ($script:anbefalt) { Vis-Klipp $true; Sett-Tips (L 'Bindy suggests a clip: click it in the list by the binder.') }
+    } catch { $svar.ForeColor = $cFeil; Sett-Svar (L 'Something went wrong: {0}' $_) $false }
     $script:jobb = $null; $script:bob = 0
-    if (-not ($script:alle -or $script:jpeg)) { $lblSer.Text = 'Bare spørsmål, uten skjerm' }
-    elseif ($script:vei) { $lblSer.Text = "Mål: $($script:veiMål)" }
+    if (-not ($script:alle -or $script:jpeg)) { $lblSer.Text = (L 'Question only, no screen') }
+    elseif ($script:vei) { $lblSer.Text = (L 'Goal: {0}' $script:veiMål) }
     $svar.SelectionStart = 0
     if ($script:vei -and -not $ferdig -and -not $script:valg.Count) { Sett-Modus 'pille'; Puls }   # veiledning: steget vises stort og tydelig i kortet øverst
     else {
@@ -1648,7 +1915,7 @@ function Behandle-Svar($j) {
     }
     if ($script:vei -or $ferdig) { $script:kollapsTid = [DateTime]::Now.AddSeconds($(if ($ferdig) { 8 } else { 10 })) }   # automatiske svar lukker seg selv
     if ($script:anbefalt -and $script:kollapsTid) { $script:kollapsTid = [DateTime]::Now.AddSeconds(30) }   # tid nok til å trykke «Lim inn»
-    if ($ferdig) { Stopp-Veiledning 'Ferdig! Veiledningen er avsluttet.'; Arkiver-Oppgave }
+    if ($ferdig) { Stopp-Veiledning (L 'Done! Guidance has ended.'); Arkiver-Oppgave }
     Oppdater-Ikon
 }
 
@@ -1678,7 +1945,7 @@ $klokke.Add_Tick({
                     $script:svarFull = $vist; $svar.Text = $vist -replace "`r?`n", "`r`n"; $script:visN = $vist.Length
                     if (-not $iMus -and [int]($vist.Length / 46) -ne $gammelLinjer) { Legg-Ut $true; $script:iHm = $script:panelH }
                 }
-                $lblSer.Text = 'Skriver'
+                $lblSer.Text = (L 'Writing')
             }
         } elseif ($script:hopp -eq 0 -and -not $script:rolig) { $script:bob = $(if ($script:tikk % 2) { -3 } else { 0 }) }
         if (-not $script:strømmer) { $lblSer.Text = $script:tenkTekst + (' ·' * ([int]($script:tikk / 3) % 3 + 1)) }
@@ -1714,7 +1981,7 @@ function Peker-Steg([double]$dt) {
 # Mens Bindy tenker vises et laste-ikon og en kort tekst ved siden av. Utstikkeren på bindersen peker oppover.
 function Mus-Tekst {
     if (-not $script:jobb) { return '' }
-    if ($script:strømmer) { return 'Skriver svar…' }
+    if ($script:strømmer) { return (L 'Writing answer…') }
     return "$($script:tenkTekst)…"
 }
 $script:musMG = [Drawing.Graphics]::FromImage((New-Object Drawing.Bitmap(1, 1)))   # gjenbrukt for måling av tekstbredde
@@ -1800,13 +2067,13 @@ $musKlokke.Add_Tick({ try {
 $musKlokke.Start()
 
 # Skrivefeltet som dukker opp ved bindersen når du trykker hurtigtasten. Enter spør, Ctrl+Enter veileder, Esc eller å klikke bort lukker.
-$musInn = New-Object InnVindu; $musInn.BackColor = (Farge '#4a4672'); $musInn.Text = 'Spør Bindy'; $musInn.AccessibleName = 'Spør Bindy'; $musInn.Padding = New-Object Windows.Forms.Padding(0); $musInn.Size = New-Object Drawing.Size((S 340), (S 44))
+$musInn = New-Object InnVindu; $musInn.BackColor = (Farge '#4a4672'); $musInn.Text = (L 'Ask Bindy'); $musInn.AccessibleName = (L 'Ask Bindy'); $musInn.Padding = New-Object Windows.Forms.Padding(0); $musInn.Size = New-Object Drawing.Size((S 340), (S 44))
 $cInnFlate = Farge '#1a1827'
 $musInnPanel = New-Object Windows.Forms.Panel; $musInnPanel.Dock = 'Fill'; $musInnPanel.BackColor = $cInnFlate; $musInnPanel.Padding = New-Object Windows.Forms.Padding((S 22), (S 11), (S 18), (S 11))
 $musInnTb = New-Object Windows.Forms.TextBox; $musInnTb.BorderStyle = 'None'; $musInnTb.BackColor = $cInnFlate; $musInnTb.ForeColor = $cTekst; $musInnTb.Font = $fTekst; $musInnTb.Dock = 'Fill'
 $musInnTb.Multiline = $true; $musInnTb.WordWrap = $true; $musInnTb.ScrollBars = 'None'; $musInnTb.AcceptsReturn = $true   # ellers får ikke KeyDown Enter i et felt med flere linjer, og Enter blir bare en ny linje
-$musInnTb.AccessibleName = 'Spør Bindy'
-$musInnHint = New-Object Windows.Forms.Label; $musInnHint.Text = 'Spør (Enter)  ·  veiled (Ctrl+Enter)'; $musInnHint.ForeColor = $cDempet; $musInnHint.BackColor = $cInnFlate; $musInnHint.Font = $fTekst; $musInnHint.AutoSize = $true; $musInnHint.Location = New-Object Drawing.Point((S 22), (S 11)); $musInnHint.AccessibleName = 'Hjelpetekst'
+$musInnTb.AccessibleName = (L 'Ask Bindy')
+$musInnHint = New-Object Windows.Forms.Label; $musInnHint.Text = (L 'Ask (Enter)  ·  guide (Ctrl+Enter)'); $musInnHint.ForeColor = $cDempet; $musInnHint.BackColor = $cInnFlate; $musInnHint.Font = $fTekst; $musInnHint.AutoSize = $true; $musInnHint.Location = New-Object Drawing.Point((S 22), (S 11)); $musInnHint.AccessibleName = (L 'Hint')
 $musInnHint.Add_Click({ $musInnTb.Focus() })
 $musInnPanel.Controls.Add($musInnTb); $musInnPanel.Controls.Add($musInnHint); $musInnHint.BringToFront(); $musInn.Controls.Add($musInnPanel)
 # Kanten tegnes på panelet med samme avrunding som vinduet (en kant som bare var vindusbakgrunn forsvant i de runde hjørnene).
@@ -1856,7 +2123,7 @@ function Mus-Spør {
 $musInnTb.Add_KeyDown({
     $ks = $_.KeyCode.ToString()   # Enter heter «Return» i .NET
     if ($ks -eq 'Return' -and $_.Shift -and -not $_.Control) { $musInnTb.SelectedText = "`r`n"; $_.SuppressKeyPress = $true }   # Shift+Enter: ny linje
-    elseif ($ks -eq 'Return' -and $script:jobb) { $_.SuppressKeyPress = $true; Sett-Toast 'Bindy tenker. Prøv igjen om et øyeblikk.' }
+    elseif ($ks -eq 'Return' -and $script:jobb) { $_.SuppressKeyPress = $true; Sett-Toast (L 'Bindy is thinking. Try again in a moment.') }
     elseif ($ks -eq 'Return') { $_.SuppressKeyPress = $true; if ($_.Control) { $inn.Text = $musInnTb.Text; Skjul-MusInn; Send-Spørsmål 'start' } else { Mus-Spør } }
     elseif ($ks -eq 'Escape') { $_.SuppressKeyPress = $true; Skjul-MusInn; Skjul-Mentor }
 })
@@ -1897,7 +2164,7 @@ $animKlokke.Add_Tick({
         $svar.Text = $script:svarFull.Substring(0, $script:visN)
     }
     if ($script:knappFlash -gt 0 -and $trinn) { $script:knappFlash--; $knapp.BackColor = $(if ($script:knappFlash % 2) { Farge '#b3acd9' } else { Farge '#8f87c2' }) }
-    if ($script:tipsTil -and [DateTime]::Now -gt $script:tipsTil) { $lblTips.Text = $TipsStandard; $script:tipsTil = $null }
+    if ($script:tipsTil -and [DateTime]::Now -gt $script:tipsTil) { $lblTips.Text = $script:TipsStandard; $script:tipsTil = $null }
     if ($script:toastTil -and [DateTime]::Now -gt $script:toastTil) { $script:toastTil = $null; $tegn = $true }
     if ($tegn -or ($script:jobb -and $trinn)) { $form.Invalidate() }
     if (($script:toppT = 1 + [int]$script:toppT) % 5 -eq 0) { foreach ($f in @($overlegg, $ramme, $peker, $mus, $musInn)) { [Vin]::Topp($f) } }   # hold tegningen over oppgavelinja og menyer
@@ -1909,16 +2176,20 @@ $animKlokke.Add_Tick({
 $animKlokke.Start()
 
 $hk = New-Object HurtigtastVindu
-$tray.ShowBalloonTip(5000, 'Bindy', $(if ($script:ClaudeSti) { 'Bindy kjører. Trykk Ctrl+Alt+H for å spørre, eller dobbeltklikk binders-ikonet.' } else { 'Fant ikke claude. Installer Claude Code og logg inn (se docs/INSTALLASJON.md), start så Bindy på nytt.' }), $(if ($script:ClaudeSti) { 'Info' } else { 'Warning' }))
-if (-not $hk.Registrer(1, 0x4003, 0x48)) { $tray.ShowBalloonTip(5000, 'Bindy', 'Ctrl+Alt+H er opptatt. Kjører Bindy allerede, eller har en annen app tatt den?', 'Warning') }   # H: spør med skjerm
-if (-not $hk.Registrer(2, 0x4003, 0x4A)) { $tray.ShowBalloonTip(5000, 'Bindy', 'Ctrl+Alt+J er opptatt. Kjører Bindy allerede, eller har en annen app tatt den?', 'Warning') }   # J: bare spørsmål
-if (-not $hk.Registrer(3, 0x4003, 0x50)) { $tray.ShowBalloonTip(5000, 'Bindy', 'Ctrl+Alt+P er opptatt. Kjører Bindy allerede, eller har en annen app tatt den?', 'Warning') }   # P: pause
-if (-not $hk.Registrer(4, 0x4003, 0x4E)) { $tray.ShowBalloonTip(5000, 'Bindy', 'Ctrl+Alt+N er opptatt.', 'Warning') }   # N: neste steg
+$tray.ShowBalloonTip(5000, 'Bindy', $(if ($script:ClaudeSti) { (L 'Bindy is running. Press {0} to ask, or double-click the binder icon.' $script:Taster.ask) } else { (L 'Could not find claude. Install Claude Code and sign in (see docs/INSTALL.md), then restart Bindy.') }), $(if ($script:ClaudeSti) { 'Info' } else { 'Warning' }))
+# Registrerer en hurtigtast fra innstillingene. Returnerer false hvis kombinasjonen er ugyldig eller opptatt.
+function Registrer-Taster([string]$navn) {
+    $t = Tast-Tolk $script:Taster[$navn]; if (-not $t) { return $false }
+    return [bool]$hk.Registrer($script:TastId[$navn], [uint32]$t[0], [uint32]$t[1])
+}
+foreach ($tn in @($script:TastId.Keys)) {
+    if (-not (Registrer-Taster $tn)) { $tray.ShowBalloonTip(5000, 'Bindy', (L '{0} is in use. Is Bindy already running, or has another app taken it?' $script:Taster[$tn]), 'Warning') }
+}
 $hk.add_Trykket({ param($id) try {
     if ($id -eq 3) { Sett-Pause (-not $script:pause); return }
     if ($id -eq 4) { Neste-Steg; return }
     if ($script:jobb) { return }
-    if ($script:pause -and $id -eq 1) { Sett-Toast 'Pauset. Ctrl+Alt+P for å fortsette'; return }
+    if ($script:pause -and $id -eq 1) { Sett-Toast (L 'Paused. {0} to resume' $script:Taster.pause); return }
     $script:kollapsTid = $null
     $svar.Text = ''; $script:svarFull = ''; $script:svarSynlig = $false; $inn.Text = ''
     if ($id -eq 2) {   # bare spørsmål, ingen skjerm
@@ -1927,10 +2198,10 @@ $hk.add_Trykket({ param($id) try {
         Skjul-Ramme; if ($script:vei) { $peker.Hide() }
         $f = Fang-Etter 'vindu'
         if (-not $f.ok) { $tray.ShowBalloonTip(3000, 'Bindy', $f.grunn, 'Warning'); return }
-        $script:skjermModus = $(if ($f.liten) { 'alle' } else { 'vindu' }); $knappSkjerm.Text = $(if ($f.liten) { 'Skjerm: alle' } else { 'Skjerm: vindu' })
+        $script:skjermModus = $(if ($f.liten) { 'alle' } else { 'vindu' }); $knappSkjerm.Text = $(if ($f.liten) { (L 'Screen: all') } else { (L 'Screen: window') })
         Bruk-Bilde $f
     }
     Vis-MusInn
-} catch { Add-Content (Join-Path $Mappe 'bindy-feil.log') "$(Get-Date -Format s) $_"; $tray.ShowBalloonTip(4000, 'Bindy', "Feil: $_", 'Error') } })
+} catch { Add-Content (Join-Path $Mappe 'bindy-feil.log') "$(Get-Date -Format s) $_"; $tray.ShowBalloonTip(4000, 'Bindy', (L 'Error: {0}' $_), 'Error') } })
 
 try { [Windows.Forms.Application]::Run() } finally { $hk.Dispose(); [MuseKrok]::Stopp(); [void][Vin]::timeEndPeriod(1) }

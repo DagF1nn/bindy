@@ -23,7 +23,7 @@ Bindy er ett PowerShell-skript (`src/bindy.ps1`) som kjører inni en liten signe
 
 ## Installer
 
-Se **[docs/INSTALLASJON.md](docs/INSTALLASJON.md)** (ca. 15 min). Kort: installer Claude Code, logg inn, kjør `scripts\installer.ps1` som administrator.
+Se **[docs/INSTALL.md](docs/INSTALL.md)** (ca. 15 min). Kort: installer Claude Code, logg inn, kjør `scripts\installer.ps1` som administrator.
 
 ## Før du installerer: les dette
 

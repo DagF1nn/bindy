@@ -3,7 +3,7 @@
 ## Oppsett
 
 - Windows 10 (2004+) eller 11, Windows PowerShell 5.1, git.
-- Claude Code installert og innlogget (se [INSTALLASJON.md](INSTALLASJON.md)) for å prøve det ekte.
+- Claude Code installert og innlogget (se [INSTALL.md](INSTALL.md)) for å prøve det ekte.
 - Ingen SDK trengs: starteren bygges med `csc.exe` som følger med Windows (`scripts\bygg.ps1`).
 
 ## Struktur
