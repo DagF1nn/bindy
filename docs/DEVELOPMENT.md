@@ -27,6 +27,16 @@ Testing the real installation needs administrator rights and changes the machine
 
 User-visible text is written in English in the code and wrapped as `(L 'English text')`. The Norwegian translation lives in the `$script:NO` dictionary at the top of `src/bindy.ps1` (English text as the key). Add a new string in both places. Texts sent to Claude are English and end with a "Reply in …" instruction taken from the language setting. Note: C# class names in `Add-Type` must be ASCII.
 
+## Letting Claude Code start a guidance
+
+With "Let Claude Code start guidance" on in Settings, a program (typically Claude Code in a terminal) starts guidance by writing the goal, plus any useful context, to `%LOCALAPPDATA%Bindyindy-start.txt` (UTF-8, max 3000 characters):
+
+```powershell
+[IO.File]::WriteAllText("$env:LOCALAPPDATABindyindy-start.txt", "Goal: show where to update drivers in Device Manager. Context: Windows 11, Norwegian UI.")
+```
+
+Bindy picks the file up within about a second, deletes it, captures all screens and starts the guidance. Write the file only when the user has asked to be guided.
+
 ## Rules for changes
 
 - **The program runs with UI access.** Read every change line by line. No `Invoke-Expression`, no downloading code, no new dependencies without a good reason.

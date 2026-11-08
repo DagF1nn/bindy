@@ -49,18 +49,19 @@ $script:musFade = 0; $script:musSist = ''
 $script:InnstFil = Join-Path $Mappe 'bindy-settings.json'
 $script:StandardTaster = [ordered]@{ ask = 'Ctrl+Alt+H'; askNoScreen = 'Ctrl+Alt+J'; pause = 'Ctrl+Alt+P'; nextStep = 'Ctrl+Alt+N' }
 $script:TastId = [ordered]@{ ask = 1; askNoScreen = 2; pause = 3; nextStep = 4 }
-$script:Språk = 'en'; $script:Taster = [ordered]@{}; foreach ($k in $script:StandardTaster.Keys) { $script:Taster[$k] = $script:StandardTaster[$k] }
+$script:TillatStartfil = $false; $script:Språk = 'en'; $script:Taster = [ordered]@{}; foreach ($k in $script:StandardTaster.Keys) { $script:Taster[$k] = $script:StandardTaster[$k] }
 $TastRegex = '^(?:(?:Ctrl|Alt|Shift|Win)\+){1,4}(?:[A-Z0-9]|F(?:[1-9]|1[0-9]|2[0-4]))$'   # filen kan skrives av annen kode: bare gyldige kombinasjoner godtas
 function Les-Innst {
     try {
         if (-not (Test-Path $script:InnstFil)) { return }
         $j = Get-Content $script:InnstFil -Raw -Encoding UTF8 | ConvertFrom-Json
         if ($j.language -in 'en', 'no') { $script:Språk = [string]$j.language }
+        if ($j.allowStartFile -is [bool]) { $script:TillatStartfil = $j.allowStartFile }
         foreach ($k in @($script:StandardTaster.Keys)) { $v = [string]$j.hotkeys.$k; if ($v -match $TastRegex) { $script:Taster[$k] = $v } }
     } catch {}
 }
 function Lagre-Innst {
-    try { $o = [ordered]@{ language = $script:Språk; hotkeys = $script:Taster }; [IO.File]::WriteAllText($script:InnstFil, ($o | ConvertTo-Json -Depth 3), (New-Object Text.UTF8Encoding($false))) } catch {}
+    try { $o = [ordered]@{ language = $script:Språk; allowStartFile = $script:TillatStartfil; hotkeys = $script:Taster }; [IO.File]::WriteAllText($script:InnstFil, ($o | ConvertTo-Json -Depth 3), (New-Object Text.UTF8Encoding($false))) } catch {}
 }
 Les-Innst
 # Tastekombinasjon som tekst («Ctrl+Alt+H») til (modifikatorer, tastekode) for RegisterHotKey. 0x4000 = ikke gjenta.
@@ -72,6 +73,8 @@ function Tast-Tolk([string]$k) {
     return @($mod, $vk)
 }
 $script:NO = @{
+    'Let Claude Code start guidance' = 'La Claude Code starte veiledning'
+    'Claude Code asked Bindy to guide you' = 'Claude Code ba Bindy om å veilede deg'
     'Blocked window ({0}): passwords and banking are not captured.' = 'Sperret vindu ({0}): passord/bank fanges ikke.'
     'A blocked window is on top: {0}' = 'Et sperret vindu ligger oppå: {0}'
     'Cannot see all screens: {0} Close or minimise the window first.' = 'Kan ikke se alle skjermene: {0} Lukk eller minimer vinduet først.'
@@ -1816,6 +1819,7 @@ function Vis-Innstillinger {
     $script:yy = $y
     [void](& $bryter (L 'Follow the mouse with the binder') $script:musPå { param($snd, $ev) $musKnapp.Checked = $snd.Checked })
     [void](& $bryter (L 'Share clips with Claude') $script:delKlipp { param($snd, $ev) $delKnapp.Checked = $snd.Checked })
+    [void](& $bryter (L 'Let Claude Code start guidance') $script:TillatStartfil { param($snd, $ev) $script:TillatStartfil = $snd.Checked; Lagre-Innst })
     [void](& $bryter (L 'Start Bindy with Windows') (Autostart-På) { param($snd, $ev) Sett-Autostart $snd.Checked })
     $y = $script:yy + 8
     # --- Hurtigtaster
@@ -1919,6 +1923,25 @@ function Behandle-Svar($j) {
     Oppdater-Ikon
 }
 
+
+# Claude Code (en annen økt, for eksempel i terminalen) kan be Bindy om å veilede deg ved å skrive målet i bindy-start.txt. Av som standard (Settings).
+# Bindy leser og sletter fila, tar bilde av alle skjermer og starter veiledning med teksten som mål. Eldre enn 2 min eller tom: ignoreres.
+$script:startFil = Join-Path $Mappe 'bindy-start.txt'
+function Sjekk-Startfil {
+    if (-not (Test-Path $script:startFil)) { return }
+    try {
+        $fi = Get-Item $script:startFil; $t = ''
+        if ($script:TillatStartfil -and ([DateTime]::Now - $fi.LastWriteTime).TotalSeconds -le 120) { $t = Get-Content $script:startFil -Raw -Encoding UTF8 }
+        Remove-Item $script:startFil -Force
+        $t = ($t -replace '[\x00-\x08\x0B\x0C\x0E-\x1F]', '').Trim(); if ($t.Length -gt 3000) { $t = $t.Substring(0, 3000) }
+        if (-not $t) { return }
+        if ($script:pause) { Sett-Toast (L 'Paused'); return }
+        Sett-Skjerm 'alle'; if (-not $script:jpeg) { return }   # Sett-Skjerm viser årsaken hvis bildet ikke ble tatt
+        $script:kollapsTid = $null; $svar.Text = ''; $script:svarFull = ''; $inn.Text = $t
+        Sett-Toast (L 'Claude Code asked Bindy to guide you')
+        Send-Spørsmål 'start'
+    } catch {}
+}
 # Klokke 1 (120 ms): leser svaret mens det strømmer inn, tar imot det ferdige svaret, lukker øya når den ikke brukes.
 $klokke = New-Object Windows.Forms.Timer
 $klokke.Interval = 120
@@ -1930,6 +1953,7 @@ $klokke.Add_Tick({
         if ($kn.ToString() -notmatch '^(Shell_TrayWnd|Shell_SecondaryTrayWnd|NotifyIconOverflowWindow|TopLevelWindowForOverflowXamlIsland)$') { $script:sistFremme = $fgh }
     }
     if ($script:tikk % 8 -eq 0 -and -not $script:pause) { Les-Utklipp }
+    if ($script:tikk % 8 -eq 4 -and -not $script:jobb) { Sjekk-Startfil }
     Klipp-Hover
     if ($script:kopiTil -and [DateTime]::Now -ge $script:kopiTil) { Kopi-Slutt }   # kopi-varselet forsvinner av seg selv
     $j = $script:jobb
