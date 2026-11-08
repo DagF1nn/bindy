@@ -1,0 +1,16 @@
+# bygg og testfiler
+out/
+out2/
+*.log
+*.tmp
+bindy-test/
+# hemmeligheter og sertifikater
+.env
+*.pfx
+*.cer
+*.key
+*.pem
+# editor
+.vs/
+.vscode/
+Thumbs.db

@@ -1,0 +1,28 @@
+name: Sjekk
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  lint:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Skriptet kan parses
+        shell: powershell
+        run: |
+          $feil = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile("$PWD\src\bindy.ps1", [ref]$null, [ref]$feil)
+          if ($feil) { $feil | ForEach-Object { Write-Host $_.Message }; exit 1 }
+      - name: PSScriptAnalyzer (bare feil)
+        shell: powershell
+        run: |
+          Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
+          $r = Invoke-ScriptAnalyzer -Path src, scripts -Recurse -Severity Error
+          $r | Format-Table -AutoSize
+          if ($r) { exit 1 }
+      - name: Starteren bygger
+        shell: powershell
+        run: ./scripts/bygg.ps1
