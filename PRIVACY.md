@@ -35,6 +35,8 @@ Everything is in `%LOCALAPPDATA%\Bindy\`:
 | `bindy-del-utklipp` | Empty file: if it exists, sharing clips is on |
 | `bindy-musefolger-av` | Empty file: if it exists, the mouse follower (paperclip by the mouse pointer) is switched off |
 
+**Developer mode:** running `bindy.ps1 -Sjekk` or `-Prov` by hand writes drawing test PNGs (`bindy-oy.png`, `bindy-peker.png`) to `%TEMP%`, and `-Prov` sends one screenshot. The installed `BindyStart.exe` cannot pass these flags.
+
 **Bindy never writes screenshots to disk.** They only live in memory until they have been sent, and Bindy asks Claude Code not to store the session (`--no-session-persistence`).
 The clipboard history (max 8, max 400 characters, deleted after 60 min) only lives in memory.
 

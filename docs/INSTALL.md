@@ -23,10 +23,9 @@ irm https://claude.ai/install.ps1 | iex
 
 # or WinGet
 winget install Anthropic.ClaudeCode
-
-# or npm (needs Node.js 22 or newer)
-npm install -g @anthropic-ai/claude-code
 ```
+
+Bindy only starts a real `claude.exe` (what these two install). An npm install gives a `claude.cmd` wrapper, which Bindy deliberately does not use.
 
 Close PowerShell, open a new window, then check:
 

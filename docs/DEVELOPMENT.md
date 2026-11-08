@@ -29,10 +29,10 @@ User-visible text is written in English in the code and wrapped as `(L 'English 
 
 ## Letting Claude Code start a guidance
 
-With "Let Claude Code start guidance" on in Settings, a program (typically Claude Code in a terminal) starts guidance by writing the goal, plus any useful context, to `%LOCALAPPDATA%Bindyindy-start.txt` (UTF-8, max 3000 characters):
+With "Let Claude Code start guidance" on in Settings, a program (typically Claude Code in a terminal) starts guidance by writing the goal, plus any useful context, to `%LOCALAPPDATA%\Bindy\bindy-start.txt` (UTF-8, max 3000 characters):
 
 ```powershell
-[IO.File]::WriteAllText("$env:LOCALAPPDATABindyindy-start.txt", "Goal: show where to update drivers in Device Manager. Context: Windows 11, Norwegian UI.")
+[IO.File]::WriteAllText("$env:LOCALAPPDATA\Bindy\bindy-start.txt", "Goal: show where to update drivers in Device Manager. Context: Windows 11, Norwegian UI.")
 ```
 
 Bindy picks the file up within about a second, deletes it, captures all screens and starts the guidance. Write the file only when the user has asked to be guided.

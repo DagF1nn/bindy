@@ -28,7 +28,7 @@ Add-Type -AssemblyName System.Windows.Forms, System.Drawing
 $Mappe  = Join-Path $env:LOCALAPPDATA 'Bindy'   # all lagring ligger her (se PRIVACY.md)
 New-Item -ItemType Directory -Force $Mappe | Out-Null
 $FeilLogg = Join-Path $Mappe 'bindy-feil.log'; if ((Test-Path $FeilLogg) -and (Get-Item $FeilLogg).Length -gt 100000) { Remove-Item $FeilLogg -ErrorAction SilentlyContinue }   # snarvei: kuttes helt ved 100 kB, ingen rotasjon
-$script:ClaudeSti = (Get-Command claude -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1).Source   # slås opp én gang ved oppstart
+$script:ClaudeSti = (Get-Command claude -CommandType Application -ErrorAction SilentlyContinue | Where-Object { $_.Extension -eq ".exe" } | Select-Object -First 1).Source   # slås opp én gang ved oppstart
 $Arbeid = Join-Path $Mappe 'bindy-arbeid'   # tom mappe: Claude leser ingen CLAUDE.md
 $Notat  = Join-Path $Mappe 'bindy-oppgave.md'
 New-Item -ItemType Directory -Force $Arbeid | Out-Null
@@ -50,14 +50,14 @@ $script:InnstFil = Join-Path $Mappe 'bindy-settings.json'
 $script:StandardTaster = [ordered]@{ ask = 'Ctrl+Alt+H'; askNoScreen = 'Ctrl+Alt+J'; pause = 'Ctrl+Alt+P'; nextStep = 'Ctrl+Alt+N' }
 $script:TastId = [ordered]@{ ask = 1; askNoScreen = 2; pause = 3; nextStep = 4 }
 $script:TillatStartfil = $false; $script:Språk = 'en'; $script:Taster = [ordered]@{}; foreach ($k in $script:StandardTaster.Keys) { $script:Taster[$k] = $script:StandardTaster[$k] }
-$TastRegex = '^(?:(?:Ctrl|Alt|Shift|Win)\+){1,4}(?:[A-Z0-9]|F(?:[1-9]|1[0-9]|2[0-4]))$'   # filen kan skrives av annen kode: bare gyldige kombinasjoner godtas
+$TastRegex = '^(?:(?:Ctrl|Alt|Shift|Win)\+){1,4}(?:[A-Z0-9]|F(?:[1-9]|1[0-9]|2[0-4]))\z'   # filen kan skrives av annen kode: bare gyldige kombinasjoner godtas
 function Les-Innst {
     try {
         if (-not (Test-Path $script:InnstFil)) { return }
         $j = Get-Content $script:InnstFil -Raw -Encoding UTF8 | ConvertFrom-Json
         if ($j.language -in 'en', 'no') { $script:Språk = [string]$j.language }
         if ($j.allowStartFile -is [bool]) { $script:TillatStartfil = $j.allowStartFile }
-        foreach ($k in @($script:StandardTaster.Keys)) { $v = [string]$j.hotkeys.$k; if ($v -match $TastRegex) { $script:Taster[$k] = $v } }
+        foreach ($k in @($script:StandardTaster.Keys)) { $v = [string]$j.hotkeys.$k; if ($v -cmatch $TastRegex) { $script:Taster[$k] = $v } }
     } catch {}
 }
 function Lagre-Innst {
@@ -66,7 +66,7 @@ function Lagre-Innst {
 Les-Innst
 # Tastekombinasjon som tekst («Ctrl+Alt+H») til (modifikatorer, tastekode) for RegisterHotKey. 0x4000 = ikke gjenta.
 function Tast-Tolk([string]$k) {
-    if ($k -notmatch $TastRegex) { return $null }
+    if ($k -cnotmatch $TastRegex) { return $null }
     $mod = 0x4000; foreach ($d in $k.Split('+')) { switch ($d) { 'Alt' { $mod = $mod -bor 1 } 'Ctrl' { $mod = $mod -bor 2 } 'Shift' { $mod = $mod -bor 4 } 'Win' { $mod = $mod -bor 8 } } }
     $t = $k.Split('+')[-1]
     $vk = $(if ($t -match '^F(\d+)$') { 0x6F + [int]$Matches[1] } else { [int][char]$t })   # A-Z og 0-9 har samme kode som tegnet
@@ -475,7 +475,7 @@ public class Mentor : Form {
     }
     protected override bool ShowWithoutActivation { get { return true; } }
 }
-// Tray-menyen: samme stil og farger som RedScreens tray-meny (avrundet, ingen kant, hake i aksentfarge).
+// Tray-menyen: dempet mørk stil (avrundet, ingen kant, hake i aksentfarge).
 public class MorkMeny : ToolStripProfessionalRenderer {
     static Color Fl = Color.FromArgb(36, 36, 42), Hov = Color.FromArgb(52, 52, 60), Tx = Color.FromArgb(242, 242, 245), Sub = Color.FromArgb(154, 154, 165), Aks = Color.FromArgb(255, 107, 74);
     [System.Runtime.InteropServices.DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr h, int a, ref int v, int s);
@@ -1777,7 +1777,7 @@ function Autostart-På { [bool](Get-ItemProperty 'HKCU:\Software\Microsoft\Windo
 function Sett-Autostart([bool]$på) {
     $rk = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
     try {
-        if ($på) { $exe = [Diagnostics.Process]::GetCurrentProcess().MainModule.FileName; Set-ItemProperty $rk -Name 'Bindy' -Value "`"$exe`"" } else { Remove-ItemProperty $rk -Name 'Bindy' -ErrorAction SilentlyContinue }
+        if ($på) { $exe = [Diagnostics.Process]::GetCurrentProcess().MainModule.FileName; if ($exe -notmatch 'BindyStart\.exe$') { return }; Set-ItemProperty $rk -Name 'Bindy' -Value "`"$exe`"" } else { Remove-ItemProperty $rk -Name 'Bindy' -ErrorAction SilentlyContinue }
     } catch {}
 }
 function Tast-Tekst([Windows.Forms.KeyEventArgs]$e) {   # tastetrykk til «Ctrl+Alt+H», eller $null hvis det ikke er en gyldig hurtigtast
@@ -1931,7 +1931,7 @@ function Sjekk-Startfil {
     if (-not (Test-Path $script:startFil)) { return }
     try {
         $fi = Get-Item $script:startFil; $t = ''
-        if ($script:TillatStartfil -and ([DateTime]::Now - $fi.LastWriteTime).TotalSeconds -le 120) { $t = Get-Content $script:startFil -Raw -Encoding UTF8 }
+        if ($script:TillatStartfil -and ([DateTime]::Now - $fi.LastWriteTime).TotalSeconds -le 120) { $sr = New-Object IO.StreamReader($script:startFil, [Text.Encoding]::UTF8); try { $buf = New-Object char[] 3001; $n = $sr.Read($buf, 0, 3001); $t = New-Object string($buf, 0, $n) } finally { $sr.Dispose() } }
         Remove-Item $script:startFil -Force
         $t = ($t -replace '[\x00-\x08\x0B\x0C\x0E-\x1F]', '').Trim(); if ($t.Length -gt 3000) { $t = $t.Substring(0, 3000) }
         if (-not $t) { return }
@@ -2203,8 +2203,7 @@ $hk = New-Object HurtigtastVindu
 $tray.ShowBalloonTip(5000, 'Bindy', $(if ($script:ClaudeSti) { (L 'Bindy is running. Press {0} to ask, or double-click the binder icon.' $script:Taster.ask) } else { (L 'Could not find claude. Install Claude Code and sign in (see docs/INSTALL.md), then restart Bindy.') }), $(if ($script:ClaudeSti) { 'Info' } else { 'Warning' }))
 # Registrerer en hurtigtast fra innstillingene. Returnerer false hvis kombinasjonen er ugyldig eller opptatt.
 function Registrer-Taster([string]$navn) {
-    $t = Tast-Tolk $script:Taster[$navn]; if (-not $t) { return $false }
-    return [bool]$hk.Registrer($script:TastId[$navn], [uint32]$t[0], [uint32]$t[1])
+    try { $t = Tast-Tolk $script:Taster[$navn]; if (-not $t) { return $false }; return [bool]$hk.Registrer($script:TastId[$navn], [uint32]$t[0], [uint32]$t[1]) } catch { return $false }
 }
 foreach ($tn in @($script:TastId.Keys)) {
     if (-not (Registrer-Taster $tn)) { $tray.ShowBalloonTip(5000, 'Bindy', (L '{0} is in use. Is Bindy already running, or has another app taken it?' $script:Taster[$tn]), 'Warning') }
