@@ -1754,7 +1754,7 @@ $musKlokke.Add_Tick({ try {
 $musKlokke.Start()
 
 # Skrivefeltet som dukker opp ved bindersen når du trykker hurtigtasten. Enter spør, Ctrl+Enter veileder, Esc eller å klikke bort lukker.
-$musInn = New-Object InnVindu; $musInn.BackColor = (Farge '#4a4672'); $musInn.Text = 'Spør Bindy'; $musInn.AccessibleName = 'Spør Bindy'; $musInn.Padding = New-Object Windows.Forms.Padding(1); $musInn.Size = New-Object Drawing.Size((S 340), (S 44))
+$musInn = New-Object InnVindu; $musInn.BackColor = (Farge '#4a4672'); $musInn.Text = 'Spør Bindy'; $musInn.AccessibleName = 'Spør Bindy'; $musInn.Padding = New-Object Windows.Forms.Padding(0); $musInn.Size = New-Object Drawing.Size((S 340), (S 44))
 $cInnFlate = Farge '#1a1827'
 $musInnPanel = New-Object Windows.Forms.Panel; $musInnPanel.Dock = 'Fill'; $musInnPanel.BackColor = $cInnFlate; $musInnPanel.Padding = New-Object Windows.Forms.Padding((S 22), (S 11), (S 18), (S 11))
 $musInnTb = New-Object Windows.Forms.TextBox; $musInnTb.BorderStyle = 'None'; $musInnTb.BackColor = $cInnFlate; $musInnTb.ForeColor = $cTekst; $musInnTb.Font = $fTekst; $musInnTb.Dock = 'Fill'
@@ -1763,6 +1763,15 @@ $musInnTb.AccessibleName = 'Spør Bindy'
 $musInnHint = New-Object Windows.Forms.Label; $musInnHint.Text = 'Spør (Enter)  ·  veiled (Ctrl+Enter)'; $musInnHint.ForeColor = $cDempet; $musInnHint.BackColor = $cInnFlate; $musInnHint.Font = $fTekst; $musInnHint.AutoSize = $true; $musInnHint.Location = New-Object Drawing.Point((S 22), (S 11)); $musInnHint.AccessibleName = 'Hjelpetekst'
 $musInnHint.Add_Click({ $musInnTb.Focus() })
 $musInnPanel.Controls.Add($musInnTb); $musInnPanel.Controls.Add($musInnHint); $musInnHint.BringToFront(); $musInn.Controls.Add($musInnPanel)
+# Kanten tegnes på panelet med samme avrunding som vinduet (en kant som bare var vindusbakgrunn forsvant i de runde hjørnene).
+$musInnPanel.Add_Resize({ $musInnPanel.Invalidate() })
+$musInnPanel.Add_Paint({ param($snd, $ev)
+    $g = $ev.Graphics; $g.SmoothingMode = 'AntiAlias'
+    $w = $snd.Width - 1; $h = $snd.Height - 1; $d = [Math]::Min($snd.Height, 52) - 1
+    $p = New-Object Drawing.Drawing2D.GraphicsPath
+    $p.AddArc(0.75, 0.75, $d, $d, 180, 90); $p.AddArc($w - $d - 0.75, 0.75, $d, $d, 270, 90); $p.AddArc($w - $d - 0.75, $h - $d - 0.75, $d, $d, 0, 90); $p.AddArc(0.75, $h - $d - 0.75, $d, $d, 90, 90); $p.CloseFigure()
+    $pn = New-Object Drawing.Pen((Farge '#4a4672'), 1.5); $g.DrawPath($pn, $p); $pn.Dispose(); $p.Dispose()
+})
 $script:musInnLukker = $false; $script:musSvar = $false; $script:musSvarFerdig = $false
 # Vinduet vokser og krymper med teksten (både det du skriver og svaret som kommer inn). Over 60 % av skjermhøyden får feltet rullefelt.
 function Mus-Størr {
