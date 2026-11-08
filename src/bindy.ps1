@@ -1784,7 +1784,6 @@ $musInnPanel.Add_Paint({ param($snd, $ev)
     $p.AddArc(0.75, 0.75, $d, $d, 180, 90); $p.AddArc($w - $d - 0.75, 0.75, $d, $d, 270, 90); $p.AddArc($w - $d - 0.75, $h - $d - 0.75, $d, $d, 0, 90); $p.AddArc(0.75, $h - $d - 0.75, $d, $d, 90, 90); $p.CloseFigure()
     $fokus = $musInnTb.Focused   # lys aksentkant mens du skriver her
     $pn = New-Object Drawing.Pen($(if ($fokus) { $cAksent } else { Farge '#4a4672' }), $(if ($fokus) { 2.0 } else { 1.5 })); $g.DrawPath($pn, $p); $pn.Dispose(); $p.Dispose()
-    if ($fokus -and -not $musInnTb.Text -and $script:musBlink) { $bs = New-Object Drawing.SolidBrush($cAksent); $g.FillRectangle($bs, (S 21), (S 12), 2, (S 20)); $bs.Dispose() }   # blinkende skrivestrek i tomt felt
 })
 $script:musInnLukker = $false; $script:musSvar = $false; $script:musBlink = $true
 # Vinduet vokser og krymper med teksten du skriver. Over 60 % av skjermhøyden får feltet rullefelt.
@@ -1801,10 +1800,6 @@ function Mus-Størr {
 }
 $musInnTb.Add_TextChanged({ if ($musInn.Visible) { Mus-Størr } })
 $musInnTb.Add_GotFocus({ $musInnPanel.Invalidate() }); $musInnTb.Add_LostFocus({ $musInnPanel.Invalidate() })
-# Blinkende strek i det tomme feltet + lys kant mens du skriver: tydelig at det er her tastene havner.
-$musBlinkKlokke = New-Object Windows.Forms.Timer; $musBlinkKlokke.Interval = 530
-$musBlinkKlokke.Add_Tick({ if ($musInn.Visible) { $script:musBlink = -not $script:musBlink; if (-not $musInnTb.Text) { $musInnPanel.Invalidate() } } })
-$musBlinkKlokke.Start()
 function Skjul-MusInn { $script:musInnLukker = $true; $musInn.Hide(); $script:musInnLukker = $false }
 function Vis-MusInn {
     $c = [Windows.Forms.Cursor]::Position
