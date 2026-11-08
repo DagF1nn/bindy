@@ -72,6 +72,8 @@ function Tast-Tolk([string]$k) {
     return @($mod, $vk)
 }
 $script:NO = @{
+    'Opening {0} …' = 'Åpner {0} …'
+    'Could not find the app {0}.' = 'Fant ikke appen {0}.'
     'Blocked window ({0}): passwords and banking are not captured.' = 'Sperret vindu ({0}): passord/bank fanges ikke.'
     'A blocked window is on top: {0}' = 'Et sperret vindu ligger oppå: {0}'
     'Cannot see all screens: {0} Close or minimise the window first.' = 'Kan ikke se alle skjermene: {0} Lukk eller minimer vinduet først.'
@@ -292,7 +294,7 @@ function Oppdater-Klipp {
     if ($null -ne $klippForm -and $klippForm.Visible) { Vis-Klipp $false }   # lista oppdateres mens den vises
 }
 $SvarSpråk = $(if ($script:Språk -eq 'no') { 'Norwegian (bokmål)' } else { 'English' })
-$Systemprompt = "You are Bindy, the user's helper on the screen: a calm, practical mentor. When a screenshot is attached you see the window (or all screens); otherwise you just answer the question. Reply in $SvarSpråk, short (max 6 lines; during guidance only 1-2 sentences): what the user sees and what the next concrete step is. Be concrete and answer immediately; if the goal is clear, answer without asking back. Ask only when the options give completely different results and you cannot decide yourself. If several ways reach the same goal (for example several ways to open a program), pick the fastest and simplest yourself and get straight to the point without asking. If you must ask (several apps, windows or screens, or an unclear goal), write STATUS: SPØRSMÅL first, one short question without listing the options in the text, and then 2-4 options as separate lines [[VALG short text]] (max 40 characters each). The user presses a button, they do not type. No MARKER with questions. Priority: what the user writes now and what the picture shows always come before the background note and earlier conversation; never cling to an old task if they ask about something else. Use the task note and earlier questions as context. Never repeat passwords, account numbers or private messages. If the picture does not show enough to answer safely (for example a small or cropped window, or the target is not visible), write BEHOV: HELE_SKJERMEN as the first line and nothing more, and you will get a picture of all their screens. When the user asks where to click in the picture, or a step is about a specific field or button, the answer MUST end with its own line [[MARKER x1 y1 x2 y2]] with integers in the picture's pixels (left top right bottom around exactly that element). Do not use MARKER otherwise, and never without a picture. You may also draw on the screen with your own lines at the end, all with coordinates in the picture's pixels: [[PIL x1 y1 x2 y2]] (arrow from start to tip: let the tip hit the target and start in an empty area), [[SIRKEL x y r]] (circle around something small), [[RAMME x1 y1 x2 y2]] (extra frame), [[NR x y n]] (numbered mark when order matters, n from 1) and [[TEKST x y short text]] (label of max 40 characters). MARKER must still always be around the main target. If the MARKER box holds several things (for example a row of hidden icons, a menu or a list), also write [[PEKER x y]] on its own line: one point in the middle of the ONE element the user should click, so the binder pointer points there and not just at the middle of the box. Use as many marks as needed (up to 12), but no more than helps. The script moves marks and labels so they do not land on top of each other, but still choose sensibly spread points. Write plain text without markdown (no **, #, backticks or lists with asterisks). Write links in full on their own line. If the instruction asks for a STATUS line, it must be the first line of the reply."
+$Systemprompt = "You are Bindy, the user's helper on the screen: a calm, practical mentor. When a screenshot is attached you see the window (or all screens); otherwise you just answer the question. Reply in $SvarSpråk, short (max 6 lines; during guidance only 1-2 sentences): what the user sees and what the next concrete step is. Be concrete and answer immediately; if the goal is clear, answer without asking back. Ask only when the options give completely different results and you cannot decide yourself. If several ways reach the same goal (for example several ways to open a program), pick the fastest and simplest yourself and get straight to the point without asking. If you must ask (several apps, windows or screens, or an unclear goal), write STATUS: SPØRSMÅL first, one short question without listing the options in the text, and then 2-4 options as separate lines [[VALG short text]] (max 40 characters each). The user presses a button, they do not type. No MARKER with questions. Priority: what the user writes now and what the picture shows always come before the background note and earlier conversation; never cling to an old task if they ask about something else. Use the task note and earlier questions as context. Never repeat passwords, account numbers or private messages. If the picture does not show enough to answer safely (for example a small or cropped window, or the target is not visible), write BEHOV: HELE_SKJERMEN as the first line and nothing more, and you will get a picture of all their screens. When the user asks where to click in the picture, or a step is about a specific field or button, the answer MUST end with its own line [[MARKER x1 y1 x2 y2]] with integers in the picture's pixels (left top right bottom around exactly that element). Do not use MARKER otherwise, and never without a picture. You may also draw on the screen with your own lines at the end, all with coordinates in the picture's pixels: [[PIL x1 y1 x2 y2]] (arrow from start to tip: let the tip hit the target and start in an empty area), [[SIRKEL x y r]] (circle around something small), [[RAMME x1 y1 x2 y2]] (extra frame), [[NR x y n]] (numbered mark when order matters, n from 1) and [[TEKST x y short text]] (label of max 40 characters). MARKER must still always be around the main target. If the MARKER box holds several things (for example a row of hidden icons, a menu or a list), also write [[PEKER x y]] on its own line: one point in the middle of the ONE element the user should click, so the binder pointer points there and not just at the middle of the box. Use as many marks as needed (up to 12), but no more than helps. The script moves marks and labels so they do not land on top of each other, but still choose sensibly spread points. If the user asks you to show or guide them in an app that is not visible on the screen yet, write its name on its own line as [[APP name]] (the name as it appears in the Start menu, for example Word, Calculator or Settings) plus one short sentence; Bindy then opens the app and asks you again with a new picture. Write [[APP]] only when the user asked for it and the app is not already visible, and never otherwise. Write plain text without markdown (no **, #, backticks or lists with asterisks). Write links in full on their own line. If the instruction asks for a STATUS line, it must be the first line of the reply."
 
 Add-Type -ReferencedAssemblies System.Windows.Forms, System.Drawing -TypeDefinition @"
 using System;
@@ -816,16 +818,43 @@ function Del-Svar([string]$svar) {
         [void]$former.Add($fo)
     }
     if ($status -eq 'SPØRSMÅL') { $former.Clear() }
-    $svar = $svar -replace '\[\[(LIM|SKRIV|VALG|PEKER|PIL|RAMME|SIRKEL|NR|TEKST)[^\]]{0,200}\]\]', ''
-    if ($status -eq 'SPØRSMÅL') { $boks = $null; $pk = $null } else { $valg = @() }
-    return @{ tekst = $svar.Trim(); boks = $boks; status = $status; behov = $behov; lim = $lim; skriv = $skriv; peker = $pk; valg = $valg; former = $former.ToArray() }
+    $app = $null; $ma = [regex]::Match($svar, '\[\[APP\s+([^\]\r\n]{1,60})\]\]'); if ($ma.Success) { $an = $ma.Groups[1].Value.Trim(); if ($an -match '^[\p{L}\p{N} .+&\-]{1,60}$') { $app = $an } }   # navn å åpne (valideres igjen mot Start-menyen)
+    $svar = $svar -replace '\[\[(LIM|SKRIV|VALG|PEKER|PIL|RAMME|SIRKEL|NR|TEKST|APP)[^\]]{0,200}\]\]', ''
+    if ($status -eq 'SPØRSMÅL') { $boks = $null; $pk = $null; $app = $null } else { $valg = @() }
+    return @{ tekst = $svar.Trim(); boks = $boks; status = $status; behov = $behov; lim = $lim; skriv = $skriv; peker = $pk; valg = $valg; former = $former.ToArray(); app = $app }
 }
 # Det som vises mens svaret strømmer inn: uten styrelinjer og halvferdige koder.
 function Rens-Delvis([string]$t) {
     if ($t.Length -gt 20000) { $t = $t.Substring(0, 20000) }
-    $t = $t -replace '(?im)^[ \t]*(STATUS|BEHOV):[^\r\n]*(\r?\n|$)', '' -replace '\[\[(MARKER|LIM|SKRIV|VALG|PEKER|PIL|RAMME|SIRKEL|NR|TEKST)[^\]]{0,200}\]\]', '' -replace '\[\[?[^\]]{0,200}$', '' -replace '\*\*|`', ''
+    $t = $t -replace '(?im)^[ \t]*(STATUS|BEHOV):[^\r\n]*(\r?\n|$)', '' -replace '\[\[(MARKER|LIM|SKRIV|VALG|PEKER|PIL|RAMME|SIRKEL|NR|TEKST|APP)[^\]]{0,200}\]\]', '' -replace '\[\[?[^\]]{0,200}$', '' -replace '\*\*|`', ''
     return $t.Trim()
 }
+
+# «Vis meg i en app»: Claude kan be om at en app åpnes med [[APP navn]]. Bindy åpner bare apper fra Windows egen app-liste (Get-StartApps), på navn, uten argumenter.
+$script:AppBlokk = 'uninstall|deinstall|remove|setup|installer|reset|repair'   # navn som aldri åpnes
+function Finn-App([string]$navn, $apper) {
+    $n = $navn.Trim().ToLower(); if (-not $n) { return $null }
+    $ok = @($apper | Where-Object { $_.Name -and $_.Name -notmatch $script:AppBlokk -and $_.AppID -and $_.AppID -notmatch '["<>|&;`]' })
+    $k = @($ok | Where-Object { $_.Name.ToLower() -eq $n })
+    if (-not $k) { $k = @($ok | Where-Object { $_.Name.ToLower().StartsWith($n) }) }
+    if (-not $k) { $k = @($ok | Where-Object { $_.Name.ToLower().Contains($n) }) }
+    return ($k | Sort-Object { $_.Name.Length } | Select-Object -First 1)
+}
+function Åpne-App([string]$navn) {   # returnerer navnet på appen som ble åpnet, ellers $null
+    try { $apper = @(Get-StartApps) } catch { return $null }
+    $a = Finn-App $navn $apper; if (-not $a) { return $null }
+    try { Start-Process explorer.exe -ArgumentList ('"shell:AppsFolder\' + $a.AppID + '"'); return [string]$a.Name } catch { return $null }
+}
+# Etter at appen er åpnet: vent litt, ta nytt bilde og still samme spørsmål på nytt, så veiledningen kan begynne i appen.
+$appKlokke = New-Object Windows.Forms.Timer; $appKlokke.Interval = 3500
+$appKlokke.Add_Tick({
+    $appKlokke.Stop()
+    if ($script:pause -or $script:jobb) { return }
+    $f = Fang-Etter $(if ($script:alle) { 'alle' } else { 'vindu' })
+    if (-not $f.ok) { Sett-Toast $f.grunn; return }
+    Bruk-Bilde $f; $script:tenkTekst = (L 'Thinking'); $script:alleForsøkt = $script:alle
+    Kjør-Kall $script:kallModus $script:sporring $ModellSpør
+})
 
 # modus: 'spor' (vanlig spørsmål, med bilde hvis $b > 0), 'start' (brukeren ber om veiledning), 'sjekk' (automatisk, skjermen har endret seg)
 function Lag-Spørsmål([string]$q, $logg, [int]$b, [int]$h, [string]$modus, [string]$steg, [bool]$alle) {
@@ -994,6 +1023,15 @@ if ($Sjekk) {
     if ($d.boks -or $d.status -or $d.behov) { Write-Host 'FEIL: Del-Svar uten ramme/status'; $fe++ }
     $d = Del-Svar "BEHOV: HELE_SKJERMEN`n"
     if (-not $d.behov -or $d.tekst) { Write-Host 'FEIL: Del-Svar behov'; $fe++ }
+    $d = Del-Svar "Opening it.`n[[APP Calculator]]"
+    if ($d.app -ne 'Calculator' -or $d.tekst -ne 'Opening it.') { Write-Host "FEIL: Del-Svar APP ($($d.app) / $($d.tekst))"; $fe++ }
+    $d = Del-Svar "Hei`n[[APP ..\evil.exe /c calc]]"
+    if ($d.app) { Write-Host 'FEIL: Del-Svar APP godtok ugyldig navn'; $fe++ }
+    $apper = @(@{ Name = 'Microsoft Word'; AppID = 'W1' }, @{ Name = 'Calculator'; AppID = 'C1' }, @{ Name = 'Uninstall Word'; AppID = 'U1' }, @{ Name = 'Windows PowerShell'; AppID = 'P"1' }, @{ Name = 'Word Setup'; AppID = 'S1' })
+    $apper = $apper | ForEach-Object { New-Object PSObject -Property $_ }
+    if ((Finn-App 'word' $apper).AppID -ne 'W1' -or (Finn-App 'calculator' $apper).AppID -ne 'C1') { Write-Host 'FEIL: Finn-App finner ikke vanlig app'; $fe++ }
+    if (Finn-App 'uninstall' $apper) { Write-Host 'FEIL: Finn-App åpner avinstallering'; $fe++ }
+    if (Finn-App 'powershell' $apper) { Write-Host 'FEIL: Finn-App godtok AppID med anførselstegn'; $fe++ }
     if ((Rens-Delvis "STATUS: GJ") -ne '' -or (Rens-Delvis "Hei [[MARK") -ne 'Hei') { Write-Host 'FEIL: Rens-Delvis'; $fe++ }
     if ((Lag-Spørsmål 'hei' @() 0 0 'spor' '' $false) -notmatch 'no screenshot') { Write-Host 'FEIL: tekstspørsmål'; $fe++ }
     $png = Join-Path $env:TEMP 'bindy-oy.png'
@@ -1043,7 +1081,7 @@ if ($Prov) {
 
 $script:jpeg = $null; $script:geom = $null; $script:tittel = ''; $script:skjermModus = 'vindu'; $script:alle = $false
 $script:logg = New-Object Collections.ArrayList
-$script:jobb = $null; $script:sporring = $null; $script:kallModus = 'spor'; $script:kallSig = $null; $script:alleForsøkt = $false
+$script:jobb = $null; $script:sporring = $null; $script:kallModus = 'spor'; $script:kallSig = $null; $script:alleForsøkt = $false; $script:appForsøk = 0
 $script:rammeTid = $null; $script:bob = 0; $script:tikk = 0; $script:overlayKlar = $false; $script:ovSkjult = @()
 $script:pause = $false; $script:toastTekst = ''; $script:toastTil = $null
 # øya
@@ -1610,7 +1648,7 @@ function Send-Spørsmål([string]$modus) {
     }
     if (-not $q) { $q = $(if ($modus -eq 'start') { 'the task described in the background note' } else { (L 'What do I do now?') }) }
     if ($modus -eq 'start') { Stopp-Veiledning $null; $script:logg.Clear(); $script:veiMål = $q; $script:veiAlle = $script:alle }   # ny veiledning: nytt mål, glemt samtale
-    $script:sporring = $q; $script:kallModus = $modus; $script:alleForsøkt = $script:alle
+    $script:sporring = $q; $script:kallModus = $modus; $script:alleForsøkt = $script:alle; $script:appForsøk = 0
     $script:kallSig = $(if ($script:jpeg) { Ta-Signatur } else { $null })
     Skjul-Ramme; $script:kollapsTid = $null
     $script:tenkTekst = (L 'Thinking'); $inn.Text = ''; $inn.Enabled = $false; $lblSer.Text = (L 'Thinking')
@@ -1884,6 +1922,16 @@ function Behandle-Svar($j) {
         }
         $stille = $script:stilleSjekk; $script:stilleSjekk = $false
         if ($stille -and $script:kallModus -eq 'sjekk' -and $d.status -eq 'IKKE_GJORT') { $script:veiSig = $script:kallSig; $script:veiSist = Get-Date; $script:jobb = $null; $script:bob = 0; Oppdater-Ikon; return }   # uten klikk: et «ikke gjort» vises ikke
+        if ($d.app -and $script:appForsøk -lt 2 -and -not $script:pause -and $script:kallModus -ne 'sjekk') {   # «vis meg i en app»: åpne den, vent, og spør på nytt med nytt bilde (ikke fra automatiske sjekker)
+            $script:appForsøk++; $åpnet = Åpne-App $d.app
+            if ($åpnet) { $script:appForsøk = 2; Sett-Toast (L 'Opening {0} …' $åpnet); $script:jobb = $null; $script:bob = 0; Oppdater-Ikon; $appKlokke.Start(); return }
+            if ($script:appForsøk -lt 2) {   # fant ikke navnet (Windows kan ha norske appnavn): gi Claude lista over installerte apper og la den prøve én gang til
+                $navnene = (@(Get-StartApps | Where-Object { $_.Name -notmatch $script:AppBlokk } | ForEach-Object { $_.Name } | Select-Object -First 300) -join ', '); if ($navnene.Length -gt 4000) { $navnene = $navnene.Substring(0, 4000) }
+                Kjør-Kall $script:kallModus ($script:sporring + "`n`n(Bindy could not find an app called `"$($d.app)`". These apps are installed: $navnene. If one of them is the app the user means, answer again with [[APP exact name from the list]]; otherwise tell the user briefly that you cannot find it.)") $ModellSpør
+                return
+            }
+            Sett-Toast (L 'Could not find the app {0}.' $d.app)
+        }
         if (-not $d.tekst -and $d.behov) { $d.tekst = (L 'I need to see more than this window, but could not capture all screens.') }
         [void]$script:logg.Add(@{ q = $script:sporring; a = $d.tekst; t = Get-Date })
         $svar.ForeColor = $cTekst; Sett-Svar $d.tekst (-not $script:strømmer)
