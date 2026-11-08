@@ -158,6 +158,7 @@ public static class Vin {
     [StructLayout(LayoutKind.Sequential)] public struct RECT { public int L, T, R, B; }
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
+    [DllImport("winmm.dll")] public static extern uint timeBeginPeriod(uint ms);   // 1 ms klokkeoppløsning: glatte animasjoner
     [DllImport("user32.dll")] public static extern IntPtr GetTopWindow(IntPtr h);
     [DllImport("user32.dll")] public static extern IntPtr GetWindow(IntPtr h, uint cmd);
     [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
@@ -1580,6 +1581,23 @@ $klokke.Add_Tick({
 })
 $klokke.Start()
 
+# Pekerens animasjon, tidsbasert (uavhengig av bildefrekvens). Kalles fra musefølger-klokka (10 ms).
+function Peker-Steg([double]$dt) {
+    $r = $dt / 30.0
+    if ($peker.Opacity -lt 0.88 -and $script:ovSkjult.Count -eq 0) { $peker.Opacity = [Math]::Min(0.88, $peker.Opacity + 0.1 * $r) }
+    $peker.Puls += 0.12 * $r
+    if ($peker.Skala -lt $sc - 0.01) { $peker.Skala += [single](($sc - $peker.Skala) * (1 - [Math]::Pow(0.9, $r))) }   # vokser fra musefølger-størrelse
+    $dx = $script:pTx - $script:px; $dy = $script:pTy - $script:py
+    $dist = [Math]::Sqrt($dx * $dx + $dy * $dy)
+    if ($dist -gt 8) { $dv = (([Math]::Atan2($dy, $dx) * 180 / [Math]::PI - $peker.Vinkel + 540) % 360) - 180; $peker.Vinkel = [single]((($peker.Vinkel + $dv * (1 - [Math]::Pow(0.88, $r))) % 360 + 360) % 360) }   # snur mot målet
+    $aMål = $(if ($dist -gt 30) { 0.0 } else { 0.92 + 0.08 * [Math]::Sin($peker.Puls * 1.5) })   # spissen inne under flyturen, trekkes ut (med lett sprett) ved fremme og stikker svakt mot målet
+    $script:aV = ($script:aV + ($aMål - $peker.Apne) * 0.09 * $r) * [Math]::Pow(0.7, $r); $peker.Apne += [single]($script:aV * $r)
+    if ([Math]::Abs($dx) -lt 1 -and [Math]::Abs($dy) -lt 1) { $script:px = $script:pTx; $script:py = $script:pTy }
+    else { $k = 1 - [Math]::Pow(0.93, $r); $script:px += $dx * $k; $script:py += $dy * $k }
+    $peker.Location = New-Object Drawing.Point(([int]$script:px - [int]($peker.Width / 2)), ([int]$script:py - [int]($peker.Height / 2)))
+    $peker.Invalidate()
+}
+
 # Klokke 4 (16 ms): musefølgeren, en liten binders som glir etter musa i fast avstand. Flytter bare vinduet når den ikke er framme.
 # Mens Bindy tenker vises et laste-ikon og en kort tekst ved siden av. Utstikkeren på bindersen peker oppover.
 function Mus-Tekst {
@@ -1611,10 +1629,15 @@ function Tegn-Mus([string]$tekst, [int]$vinkel, [double]$ret, [double]$alfa = 1.
     $g.Dispose(); return $bmp
 }
 $script:musTekst = $null; $script:musVinkel = 0; $script:musBmp = $null; $script:musB = 40
+$script:musRefT = 0; $script:musRefX = 0; $script:musRefY = 0
 $script:musRet = -90.0; $script:musRetMål = -90.0; $script:musStille = 0; $script:musCX = 0; $script:musCY = 0
 $musKlokke = New-Object Windows.Forms.Timer
-$musKlokke.Interval = 16
+$musKlokke.Interval = 10
+$script:musSW = [Diagnostics.Stopwatch]::StartNew(); $script:musTid = 0; $script:musTegnT = 0
+[void][Vin]::timeBeginPeriod(1)
 $musKlokke.Add_Tick({
+    $nu = $script:musSW.ElapsedMilliseconds; $dt = [Math]::Min(100, [Math]::Max(1, $nu - $script:musTid)); $script:musTid = $nu
+    if ($peker.Visible) { Peker-Steg $dt }
     if ($script:pause -or -not $script:musPå) { if ($script:musVist) { $mus.Hide(); $script:musVist = $false; $script:musX = $null; $script:musFramme = $false }; return }
     if ($musInn.Visible) { return }   # skrivefeltet står ved siden av: bindersen holder seg i ro
     if ($peker.Visible -and $script:jobb) { $script:musX = $script:px - 20; $script:musY = $script:py - 20; $script:musFramme = $false; $script:musRet = -90.0; $peker.Hide() }   # Bindy tenker: bindersen går tilbake til å følge musa (og flyr ut igjen med neste svar)
@@ -1624,17 +1647,22 @@ $musKlokke.Add_Tick({
     }
     $tekst = Mus-Tekst; $ny = $false; $alfa = 1.0
     if ($tekst) { $script:musSist = $tekst; $script:musFade = 12 }
-    elseif ($script:musFade -gt 0 -and $script:musSist) { $script:musFade--; $tekst = $script:musSist; $alfa = $script:musFade / 12.0; $ny = $true }   # myk fade ut når tenkingen er ferdig
-    if ($tekst) { $script:musVinkel = ($script:musVinkel + 24) % 360; if (-not $script:musBmp -or $script:musTikk++ % 3 -eq 0) { $ny = $true } }
+    elseif ($script:musFade -gt 0 -and $script:musSist) { $script:musFade -= $dt / 16.0; $tekst = $script:musSist; $alfa = [Math]::Max(0, $script:musFade / 12.0); $ny = $true }   # myk fade ut når tenkingen er ferdig
+    if ($tekst) { $script:musVinkel = ($script:musVinkel + 1.5 * $dt) % 360; if (-not $script:musBmp -or ($nu - $script:musTegnT) -ge 33) { $ny = $true } }
     if ($tekst -ne $script:musTekst) { $script:musTekst = $tekst; $ny = $true }
     $c = [Windows.Forms.Cursor]::Position
     $cdx = $c.X - $script:musCX; $cdy = $c.Y - $script:musCY
-    if ([Math]::Abs($cdx) + [Math]::Abs($cdy) -ge 3) { $script:musRetMål = [Math]::Atan2($cdy, $cdx) * 180 / [Math]::PI; $script:musStille = 0 }   # utstikkeren peker i bevegelsesretningen
-    else { $script:musStille++; if ($script:musStille -gt 6) { $script:musRetMål = -90.0 } }   # musa har stoppet: rett seg opp
+    if (($nu - $script:musRefT) -ge 25) {   # retningen måles over 25 ms-vinduer (jevnere enn hver tikk)
+        $rx = $c.X - $script:musRefX; $ry = $c.Y - $script:musRefY
+        if ([Math]::Abs($rx) + [Math]::Abs($ry) -ge 3) { $script:musRetMål = [Math]::Atan2($ry, $rx) * 180 / [Math]::PI; $script:musStille = 0 }   # utstikkeren peker i bevegelsesretningen
+        else { $script:musStille += $nu - $script:musRefT }
+        $script:musRefT = $nu; $script:musRefX = $c.X; $script:musRefY = $c.Y
+    }
+    if ($script:musStille -gt 100) { $script:musRetMål = -90.0 }   # musa har stoppet: rett seg opp
     $dv = (($script:musRetMål - $script:musRet + 540) % 360) - 180
-    if ([Math]::Abs($dv) -gt 0.5) { $script:musRet += $dv * 0.2; $ny = $true }
+    if ([Math]::Abs($dv) -gt 0.5) { $script:musRet += $dv * (1 - [Math]::Exp(-$dt / 70.0)); $ny = $true }
     if ($ny -or -not $script:musBmp) {
-        $gammel = $script:musBmp; $script:musBmp = Tegn-Mus $tekst $script:musVinkel $script:musRet $alfa; $script:musB = $script:musBmp.Width
+        $gammel = $script:musBmp; $script:musBmp = Tegn-Mus $tekst $script:musVinkel $script:musRet $alfa; $script:musB = $script:musBmp.Width; $script:musTegnT = $nu
         if ($gammel) { $gammel.Dispose() }
         if ($script:musVist) { $mus.Vis($script:musBmp, [int][Math]::Round($script:musX), [int][Math]::Round($script:musY)) }
     }
@@ -1646,7 +1674,7 @@ $musKlokke.Add_Tick({
     else {
         $dx = $m[0] - $script:musX; $dy = $m[1] - $script:musY
         if ([Math]::Abs($dx) -lt 1 -and [Math]::Abs($dy) -lt 1) { $script:musFramme = $true; if ($dx -eq 0 -and $dy -eq 0) { return }; $script:musX = [double]$m[0]; $script:musY = [double]$m[1] }
-        else { $script:musX += $dx * 0.3; $script:musY += $dy * 0.3 }
+        else { $k = 1 - [Math]::Exp(-$dt / 45.0); $script:musX += $dx * $k; $script:musY += $dy * $k }
     }
     if (-not $script:musVist) { $mus.Show(); $mus.Vis($script:musBmp, [int][Math]::Round($script:musX), [int][Math]::Round($script:musY)); $script:musVist = $true }
     else { $mus.Flytt([int][Math]::Round($script:musX), [int][Math]::Round($script:musY)) }
@@ -1683,52 +1711,42 @@ $veiKlokke = New-Object Windows.Forms.Timer
 $veiKlokke.Interval = 450
 $veiKlokke.Add_Tick({ try { Følg-Med } catch { } })
 
-# Klokke 3 (30 ms): animasjoner: øya vokser og krymper, tones inn og ut, binders hopper, ring, skrivemaskin, peker.
+# Klokke 3 (15 ms, tidsbasert): animasjoner: øya vokser og krymper, tones inn og ut, binders hopper, ring, skrivemaskin, peker.
 $animKlokke = New-Object Windows.Forms.Timer
-$animKlokke.Interval = 30
+$animKlokke.Interval = 15
+$script:animSW = [Diagnostics.Stopwatch]::StartNew(); $script:animSist = 0; $script:animAkk = 0
 $animKlokke.Add_Tick({
     $tegn = $false
+    $nu = $script:animSW.ElapsedMilliseconds; $dt = [Math]::Min(100, [Math]::Max(1, $nu - $script:animSist)); $script:animSist = $nu; $r = $dt / 30.0
+    $script:animAkk += $dt; $trinn = $script:animAkk -ge 30; if ($trinn) { $script:animAkk -= 30 }   # tellere (hopp, blink, skrivemaskin) går i 30 ms-trinn
     $o = $form.Opacity; $m = $script:fadeMål   # tone inn/ut
     if ([Math]::Abs($o - $m) -gt 0.001 -and $script:ovSkjult.Count -eq 0) {
-        $o = $(if ($o -lt $m) { [Math]::Min($m, $o + 0.14) } else { [Math]::Max($m, $o - 0.12) }); $form.Opacity = $o
+        $o = $(if ($o -lt $m) { [Math]::Min($m, $o + 0.14 * $r) } else { [Math]::Max($m, $o - 0.12 * $r) }); $form.Opacity = $o
         if ($o -le 0.001 -and $m -eq 0) {
             $form.Hide()
             if (-not $script:vei) { $inn.Text = ''; $svar.Text = ''; $script:svarFull = ''; $script:svarSynlig = $false }
         }
     }
     if ([Math]::Abs($script:iB - $script:iBm) -gt 0.4 -or [Math]::Abs($script:iH - $script:iHm) -gt 0.4) {   # øya glir mot målstørrelsen
-        $script:iB += ($script:iBm - $script:iB) * 0.28; $script:iH += ($script:iHm - $script:iH) * 0.28; $tegn = $true
+        $kb = 1 - [Math]::Pow(0.72, $r); $script:iB += ($script:iBm - $script:iB) * $kb; $script:iH += ($script:iHm - $script:iH) * $kb; $tegn = $true
         Vis-Innhold
     } elseif ($script:iB -ne $script:iBm -or $script:iH -ne $script:iHm) { $script:iB = $script:iBm; $script:iH = $script:iHm; $tegn = $true; Vis-Innhold }
     if ($script:rolig) { $script:hopp = 0 }
-    if ($script:hopp -gt 0) { $script:hopp--; $script:bob = -[int](8 * [Math]::Sin([Math]::PI * (1 - $script:hopp / 9.0))); $tegn = $true }
-    if ($script:ring -gt 0) { $script:ring = [Math]::Max(0, $script:ring - 0.045); $tegn = $true }
-    if (-not $script:strømmer -and $script:svarFull -and $script:visN -lt $script:svarFull.Length) {   # skrivemaskin (ikke når svaret strømmet inn)
+    if ($script:hopp -gt 0 -and $trinn) { $script:hopp--; $script:bob = -[int](8 * [Math]::Sin([Math]::PI * (1 - $script:hopp / 9.0))); $tegn = $true }
+    if ($script:ring -gt 0) { $script:ring = [Math]::Max(0, $script:ring - 0.045 * $r); $tegn = $true }
+    if ($trinn -and -not $script:strømmer -and $script:svarFull -and $script:visN -lt $script:svarFull.Length) {   # skrivemaskin (ikke når svaret strømmet inn)
         $script:visN = [Math]::Min($script:svarFull.Length, $script:visN + [Math]::Max(2, [int]($script:svarFull.Length / 25)))
         $svar.Text = $script:svarFull.Substring(0, $script:visN)
     }
-    if ($script:knappFlash -gt 0) { $script:knappFlash--; $knapp.BackColor = $(if ($script:knappFlash % 2) { Farge '#b3acd9' } else { Farge '#8f87c2' }) }
+    if ($script:knappFlash -gt 0 -and $trinn) { $script:knappFlash--; $knapp.BackColor = $(if ($script:knappFlash % 2) { Farge '#b3acd9' } else { Farge '#8f87c2' }) }
     if ($script:tipsTil -and [DateTime]::Now -gt $script:tipsTil) { $lblTips.Text = $TipsStandard; $script:tipsTil = $null }
     if ($script:toastTil -and [DateTime]::Now -gt $script:toastTil) { $script:toastTil = $null; $tegn = $true }
-    if ($tegn -or $script:jobb) { $form.Invalidate() }
+    if ($tegn -or ($script:jobb -and $trinn)) { $form.Invalidate() }
     if (($script:toppT = 1 + [int]$script:toppT) % 5 -eq 0) { foreach ($f in @($overlegg, $ramme, $peker, $mus, $musInn)) { [Vin]::Topp($f) } }   # hold tegningen over oppgavelinja og menyer
     if ($script:ovShapes -and $overlegg.Visible) {
         $script:ovFrame++; $alder = ([DateTime]::Now - $script:ovStart).TotalSeconds
         if ($alder -lt 1.4 -or $script:ovFrame % 4 -eq 0 -or $script:ovNy) { $script:ovNy = $false; Tegn-Overlegg }
     }
-    if (-not $peker.Visible) { return }
-    if ($peker.Opacity -lt 0.88 -and $script:ovSkjult.Count -eq 0) { $peker.Opacity = [Math]::Min(0.88, $peker.Opacity + 0.1) }
-    $peker.Puls += 0.12
-    if ($peker.Skala -lt $sc - 0.01) { $peker.Skala += [single](($sc - $peker.Skala) * 0.1) }   # vokser fra musefølger-størrelse
-    $dx = $script:pTx - $script:px; $dy = $script:pTy - $script:py
-    $dist = [Math]::Sqrt($dx * $dx + $dy * $dy)
-    if ($dist -gt 8) { $dv = (([Math]::Atan2($dy, $dx) * 180 / [Math]::PI - $peker.Vinkel + 540) % 360) - 180; $peker.Vinkel = [single]((($peker.Vinkel + $dv * 0.12) % 360 + 360) % 360) }   # snur mot målet
-    $aMål = $(if ($dist -gt 30) { 0.0 } else { 0.92 + 0.08 * [Math]::Sin($peker.Puls * 1.5) })   # spissen inne under flyturen, trekkes ut (med lett sprett) ved fremme og stikker svakt mot målet
-    $script:aV = ($script:aV + ($aMål - $peker.Apne) * 0.09) * 0.7; $peker.Apne += [single]$script:aV
-    if ([Math]::Abs($dx) -lt 1 -and [Math]::Abs($dy) -lt 1) { $script:px = $script:pTx; $script:py = $script:pTy }
-    else { $script:px += $dx * 0.07; $script:py += $dy * 0.07 }
-    $peker.Location = New-Object Drawing.Point(([int]$script:px - [int]($peker.Width / 2)), ([int]$script:py - [int]($peker.Height / 2)))
-    $peker.Invalidate()
 })
 $animKlokke.Start()
 
