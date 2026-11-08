@@ -376,6 +376,12 @@ public class InnVindu : Form {
         get { CreateParams p = base.CreateParams; p.ExStyle |= 0x80; return p; }
     }
 }
+// Snakkeboble ved bindersen: tar ikke fokus (ShowWithoutActivation + NOACTIVATE), vises ikke i Alt-Tab.
+public class Boble : Form {
+    public Boble() { FormBorderStyle = FormBorderStyle.None; ShowInTaskbar = false; TopMost = true; StartPosition = FormStartPosition.Manual; SetStyle(ControlStyles.OptimizedDoubleBuffer | ControlStyles.AllPaintingInWmPaint | ControlStyles.UserPaint, true); }
+    protected override bool ShowWithoutActivation { get { return true; } }
+    protected override CreateParams CreateParams { get { CreateParams p = base.CreateParams; p.ExStyle |= 0x08000000 | 0x80; return p; } }
+}
 // Utklippslista som vises ved bindersen: tar ikke fokus, så vinduet brukeren kom fra beholder det.
 public class KlippVindu : Form {
     public KlippVindu() { FormBorderStyle = FormBorderStyle.None; ShowInTaskbar = false; TopMost = true; StartPosition = FormStartPosition.Manual; }
@@ -683,7 +689,7 @@ function Rens-Delvis([string]$t) {
 # modus: 'spor' (vanlig spørsmål, med bilde hvis $b > 0), 'start' (brukeren ber om veiledning), 'sjekk' (automatisk, skjermen har endret seg)
 function Lag-Spørsmål([string]$q, $logg, [int]$b, [int]$h, [string]$modus, [string]$steg, [bool]$alle) {
     $notat = Les-Notat
-    $s = ''
+    $s = "SPRÅK: Svar på norsk, ekstremt enkelt og kort, som til noen som aldri har brukt data. Korte hverdagsord, ingen fagord eller engelske knappenavn uten forklaring, maks 2 korte setninger (et steg er én setning på under 12 ord). Svaret vises i en liten taleboks ved bindersen.`n`n"
     if ($notat) { $s += "BAKGRUNN fra brukerens samtale med Claude i terminalen (kan være utdatert; bruk den bare hvis den passer med det brukeren spør om eller det bildet viser):`n$notat`n`n" }
     $siste = @($logg | Where-Object { ((Get-Date) - $_.t).TotalMinutes -lt 10 } | Select-Object -Last 6)
     if ($siste.Count) { $s += "TIDLIGERE I DENNE ØKTA:`n" + (($siste | ForEach-Object { "brukeren: $($_.q)`nBindy: $($_.a)" }) -join "`n") + "`n`n" }
@@ -695,6 +701,11 @@ function Lag-Spørsmål([string]$q, $logg, [int]$b, [int]$h, [string]$modus, [st
     $s += $kb
     $mark = "[[MARKER x1 y1 x2 y2]]"
     $bilde = $(if ($alle) { "Bildet viser ALLE skjermene side om side og er $b x $h piksler." } else { "Bildet viser ett vindu og er $b x $h piksler." })
+    if ($alle -and $script:geom -and $script:geom.skala) {   # flere skjermer: si hvor de ligger i bildet og hvilken musa står på, så veiledningen holder seg der
+        $sk = $script:geom.skala; $mp = [Windows.Forms.Cursor]::Position; $si = 0; $med = 0; $deler = @()
+        foreach ($sc in [Windows.Forms.Screen]::AllScreens) { $si++; $r = $sc.Bounds; if ($r.Contains($mp)) { $med = $si }; $deler += ("skjerm $si = x " + [int](($r.Left - $script:geom.L) / $sk) + " til " + [int](($r.Right - $script:geom.L) / $sk) + ", y " + [int](($r.Top - $script:geom.T) / $sk) + " til " + [int](($r.Bottom - $script:geom.T) / $sk)) }
+        if ($si -gt 1 -and $med) { $bilde += " Skjermene i bildet: " + ($deler -join '; ') + ". Musepekeren står på skjerm $med. PRIORITER skjerm ${med}: veiled der så lenge steget kan gjøres der. Send bare brukeren til en annen skjerm når det ikke går, og si da tydelig hvilken skjerm." }
+    }
     switch ($modus) {
         'start' { return $s + "$bilde brukeren vil bli veiledet steg for steg gjennom: $q`nGi BARE neste steg: én kort setning om hva han skal gjøre nå, og avslutt med $mark rundt akkurat det han skal trykke på eller bruke. Første linje i svaret skal være: STATUS: STEG. Hvert steg er ÉN fysisk handling (ett klikk, eller skriv ett ord), aldri flere handlinger i samme steg, og alltid med MARKER rundt elementet og [[PEKER x y]] på det ene punktet han skal trykke på, så han aldri må lete. Velg selv den raskeste veien når flere går (ikke spør om det). Unntak: må du spørre fordi alternativene gir ulike resultater, skriv STATUS: SPØRSMÅL som første linje, ett kort spørsmål og 2-4 linjer [[VALG kort tekst]] (ingen MARKER, ingen steg ennå)." }
         'sjekk' { return $s + "VEILEDNING PÅGÅR. brukerens mål (det han selv ba om): «$($script:veiMål)». Steget du ga sist: «$steg». $($script:ståttNote)Skjermen har endret seg siden. Bildet er tatt ETTER at brukeren handlet: vurder ut fra hva skjermen viser nå. Er resultatet av steget synlig (for eksempel at menyen eller vinduet har åpnet seg), svar GJORT selv om det ser litt annerledes ut enn du ventet. Svar IKKE_GJORT bare når du ser at det ikke har skjedd. $bilde Første linje i svaret skal være nøyaktig én av disse:`nSTATUS: GJORT (steget er gjort: gi så neste steg, én kort setning med én enkelt handling, og avslutt med $mark pluss [[PEKER x y]] på det ene punktet han skal trykke på)`nSTATUS: IKKE_GJORT (ikke gjort ennå: si kort hva som mangler, og $mark om relevant)`nSTATUS: FERDIG (hele oppgaven er ferdig: si det kort)`nSkriv ingenting før STATUS-linja." }
@@ -1183,7 +1194,7 @@ function Sett-Toast([string]$t) {
 function Skjul-Mentor {
     Skjul-Klipp
     $script:kollapsTid = $null
-    if ($script:vei) { Sett-Modus 'pille'; return }
+    if ($script:vei) { Sett-Modus 'skjult'; return }
     Skjul-Ramme
     $script:jpeg = $null; $script:geom = $null; $script:tittel = ''   # bildet slettes
     Sett-Modus 'skjult'
@@ -1201,7 +1212,7 @@ function Stopp-Alt {
     if ($j) { try { $j.p.Kill() } catch {}; $script:jobb = $null; $script:bob = 0; $script:strømmer = $false; $inn.Enabled = $true }
     Stopp-Veiledning $null
     Skjul-Ramme; $peker.Hide()
-    $script:musFade = 0; if ($script:musSvar) { Skjul-MusInn }
+    $script:musFade = 0; $script:musSvar = $false; Skjul-Boble
     $lblSer.Text = 'Stoppet'; Oppdater-Ikon; Sett-Toast 'Stoppet'
 }
 $knappStopp.Add_Click({ Stopp-Alt })
@@ -1451,7 +1462,7 @@ function Start-Veiledning {
 function Stopp-Veiledning([string]$grunn) {
     if (-not $script:vei) { return }
     $script:vei = $false; $script:veiSteg = ''; $script:veiMål = ''; $script:veiAlle = $false; $script:mål = $null; [MuseKrok]::Stopp(); $veiKlokke.Stop()
-    $peker.Hide(); Skjul-Ramme; Oppdater-Ikon
+    $peker.Hide(); Skjul-Ramme; if ($script:bTekst) { $script:bTil = [DateTime]::Now.AddSeconds(15) }; Oppdater-Ikon
     if ($script:modus -eq 'pille') { Sett-Modus 'skjult' }
     if ($grunn) { $tray.ShowBalloonTip(4000, 'Bindy', $grunn, 'Info') }
 }
@@ -1537,7 +1548,7 @@ $stoppKnapp = New-Object Windows.Forms.ToolStripMenuItem('Stopp (avbryt og stopp
 $stoppKnapp.Enabled = $false
 $stoppKnapp.Add_Click({ Stopp-Alt })
 $glemKnapp = New-Object Windows.Forms.ToolStripMenuItem('Glem oppgaven (nytt mål)')
-$glemKnapp.Add_Click({ Stopp-Veiledning $null; Arkiver-Oppgave; Skjul-Mentor; $tray.ShowBalloonTip(2500, 'Bindy', 'Oppgaven og samtalen er glemt.', 'Info') })
+$glemKnapp.Add_Click({ Skjul-Boble; Stopp-Veiledning $null; Arkiver-Oppgave; Skjul-Mentor; $tray.ShowBalloonTip(2500, 'Bindy', 'Oppgaven og samtalen er glemt.', 'Info') })
 $apneKnapp = New-Object Windows.Forms.ToolStripMenuItem('Åpne Bindy (spør uten skjerm)')
 $apneKnapp.Add_Click({ $script:fokusNår = $true; Sett-Modus 'full'; Puls })
 $tomKnapp = New-Object Windows.Forms.ToolStripMenuItem('Tøm utklipp'); $tomKnapp.Add_Click({ Tøm-Klipp })
@@ -1572,9 +1583,9 @@ function Behandle-Svar($j) {
         [void]$script:logg.Add(@{ q = $script:sporring; a = $d.tekst; t = Get-Date })
         $svar.ForeColor = $cTekst; Sett-Svar $d.tekst (-not $script:strømmer)
         $script:valg = @($d.valg); if ($script:valg.Count) { $script:fokusNår = $true; Sett-Modus 'full'; Legg-Ut $true; $script:iHm = $script:panelH; Vis-Innhold }
-        if ($script:musSvar -and $musInn.Visible) {   # svaret blir stående i skrivefeltet (valgknapper og veiledning bruker panelet i stedet)
-            if ($script:valg.Count -or $script:kallModus -eq 'start') { Skjul-MusInn } else { $musBrukt = $true; $musInnTb.ReadOnly = $false; Mus-Tekst-Sett $script:svarFull $false; $script:musSvarFerdig = $true }
-        }
+        if ($script:valg.Count) { Skjul-Boble }   # valgknapper bruker panelet
+        elseif ($d.tekst -and ($script:musSvar -or $script:vei -or $script:kallModus -eq 'start')) { $musBrukt = $true; Boble-Sett $script:svarFull }   # bindersen sier svaret og stegene i en liten taleboks
+        $script:musSvar = $false
         if ($script:kallModus -eq 'start' -and $d.status -ne 'SPØRSMÅL') { Start-Veiledning }   # SPØRSMÅL: Claude ber om kontekst først, veiledningen starter når brukeren svarer og trykker «Veiled meg» igjen
         if ($script:vei) {
             switch ($d.status) {
@@ -1590,7 +1601,7 @@ function Behandle-Svar($j) {
         if ($d.skriv) { Legg-Klipp $d.skriv; $script:anbefalt = $true }   # Claude foreslår tekst: den havner øverst i utklippet, brukeren trykker «Lim inn»
         elseif ($d.lim -and $d.lim -le $script:klippSendt.Count) { $ki = $script:klipp.IndexOf($script:klippSendt[$d.lim - 1]); if ($ki -ge 0) { $script:klippN = $ki; $script:anbefalt = $true } }
         if ($script:anbefalt) { Vis-Klipp $true; Sett-Tips 'Bindy anbefaler et utklipp: klikk det i lista ved bindersen.' }
-    } catch { $svar.ForeColor = $cFeil; Sett-Svar "Noe gikk galt: $_" $false; if ($script:musSvar -and $musInn.Visible) { $musBrukt = $true; $musInnTb.ReadOnly = $false; Mus-Tekst-Sett "Noe gikk galt: $_" $false; $script:musSvarFerdig = $true } }
+    } catch { $svar.ForeColor = $cFeil; Sett-Svar "Noe gikk galt: $_" $false; if ($script:musSvar) { $musBrukt = $true; Boble-Sett "Noe gikk galt: $_"; $script:musSvar = $false } }
     $script:jobb = $null; $script:bob = 0
     if (-not ($script:alle -or $script:jpeg)) { $lblSer.Text = 'Bare spørsmål, uten skjerm' }
     elseif ($script:vei) { $lblSer.Text = "Mål: $($script:veiMål)" }
@@ -1624,12 +1635,12 @@ $klokke.Add_Tick({
         if ($j.delvis) {   # tekst på vei: vis den med en gang (ikke for automatiske sjekker, de åpner panelet først når de er ferdige)
             $vist = Rens-Delvis $j.delvis
             if ($vist -and $script:kallModus -ne 'sjekk' -and -not $j.delvis.TrimStart().StartsWith('BEHOV')) {
-                $iMus = $script:musSvar -and $musInn.Visible   # svaret skrives i skrivefeltet ved bindersen i stedet for i panelet
+                $iMus = $script:musSvar -or $script:kallModus -eq 'start'   # svaret sies i en taleboks ved bindersen i stedet for i panelet
                 if (-not $script:strømmer) { $script:strømmer = $true; $script:visN = 0; $script:svarFull = ''; if (-not $iMus) { Sett-Modus 'full' } }
                 if ($vist -ne $script:svarFull) {
                     $gammelLinjer = [int]($script:svarFull.Length / 46)
                     $script:svarFull = $vist; $svar.Text = $vist -replace "`r?`n", "`r`n"; $script:visN = $vist.Length
-                    if ($iMus) { Mus-Tekst-Sett $vist $false }
+                    if ($iMus) { Boble-Sett $vist }
                     elseif ([int]($vist.Length / 46) -ne $gammelLinjer) { Legg-Ut $true; $script:iHm = $script:panelH }
                 }
                 $lblSer.Text = 'Skriver'
@@ -1641,7 +1652,7 @@ $klokke.Add_Tick({
     if ($j -and $j.p.HasExited -and $j.ferdig) { Behandle-Svar $j }
     if ($script:kollapsTid -and [DateTime]::Now -gt $script:kollapsTid) {
         if ($inn.Focused -or $inn.Text -or $script:valg.Count -or $form.ContainsFocus) { $script:kollapsTid = [DateTime]::Now.AddSeconds(5) }   # du skriver: la den stå
-        else { $script:kollapsTid = $null; Sett-Modus $(if ($script:vei) { 'pille' } else { 'skjult' }) }
+        else { $script:kollapsTid = $null; Sett-Modus 'skjult' }
     }
     if ($script:rammeTid -and [DateTime]::Now -gt $script:rammeTid) { Skjul-Ramme }
 })
@@ -1703,6 +1714,7 @@ $script:musSW = [Diagnostics.Stopwatch]::StartNew(); $script:musTid = 0; $script
 $musKlokke.Add_Tick({ try {
     $nu = $script:musSW.ElapsedMilliseconds; $dt = [Math]::Min(100, [Math]::Max(1, $nu - $script:musTid)); $script:musTid = $nu
     if ($peker.Visible) { Peker-Steg $dt }
+    if ($bobl.Visible) { if ($script:bTil -and [DateTime]::Now -gt $script:bTil) { Skjul-Boble } else { Boble-Plasser $false } }   # taleboblen følger bindersen
     if ($script:pause -or -not $script:musPå) { if ($script:musVist) { $mus.Hide(); $script:musVist = $false; $script:musX = $null; $script:musFramme = $false }; return }
     if ($musInn.Visible) { return }   # skrivefeltet står ved siden av: bindersen holder seg i ro
     if ($peker.Visible -and $script:jobb) { $script:musX = $script:px - 20; $script:musY = $script:py - 20; $script:musFramme = $false; $script:musRet = -90.0; $peker.Hide() }   # Bindy tenker: bindersen går tilbake til å følge musa (og flyr ut igjen med neste svar)
@@ -1770,10 +1782,12 @@ $musInnPanel.Add_Paint({ param($snd, $ev)
     $w = $snd.Width - 1; $h = $snd.Height - 1; $d = [Math]::Min($snd.Height, 52) - 1
     $p = New-Object Drawing.Drawing2D.GraphicsPath
     $p.AddArc(0.75, 0.75, $d, $d, 180, 90); $p.AddArc($w - $d - 0.75, 0.75, $d, $d, 270, 90); $p.AddArc($w - $d - 0.75, $h - $d - 0.75, $d, $d, 0, 90); $p.AddArc(0.75, $h - $d - 0.75, $d, $d, 90, 90); $p.CloseFigure()
-    $pn = New-Object Drawing.Pen((Farge '#4a4672'), 1.5); $g.DrawPath($pn, $p); $pn.Dispose(); $p.Dispose()
+    $fokus = $musInnTb.Focused   # lys aksentkant mens du skriver her
+    $pn = New-Object Drawing.Pen($(if ($fokus) { $cAksent } else { Farge '#4a4672' }), $(if ($fokus) { 2.0 } else { 1.5 })); $g.DrawPath($pn, $p); $pn.Dispose(); $p.Dispose()
+    if ($fokus -and -not $musInnTb.Text -and $script:musBlink) { $bs = New-Object Drawing.SolidBrush($cAksent); $g.FillRectangle($bs, (S 21), (S 12), 2, (S 20)); $bs.Dispose() }   # blinkende skrivestrek i tomt felt
 })
-$script:musInnLukker = $false; $script:musSvar = $false; $script:musSvarFerdig = $false
-# Vinduet vokser og krymper med teksten (både det du skriver og svaret som kommer inn). Over 60 % av skjermhøyden får feltet rullefelt.
+$script:musInnLukker = $false; $script:musSvar = $false; $script:musBlink = $true
+# Vinduet vokser og krymper med teksten du skriver. Over 60 % av skjermhøyden får feltet rullefelt.
 function Mus-Størr {
     $wa = [Windows.Forms.Screen]::FromControl($musInn).WorkingArea
     $t = $musInnTb.Text; if (-not $t) { $t = ' ' }; if ($t.EndsWith("`n")) { $t += ' ' }
@@ -1781,43 +1795,102 @@ function Mus-Størr {
     $maks = [int]($wa.Height * 0.6); $ønsket = $m.Height + $musInnPanel.Padding.Vertical + 4
     $musInnTb.ScrollBars = $(if ($ønsket -gt $maks) { 'Vertical' } else { 'None' })
     $h = [Math]::Max((S 44), [Math]::Min($maks, $ønsket))
-    $musInnHint.Visible = (-not $musInnTb.Text) -and -not $script:musSvar
+    $musInnHint.Visible = -not $musInnTb.Text; $musInnHint.Left = S 30
     if ($h -ne $musInn.Height) { $y = [Math]::Max($wa.Top, [Math]::Min($musInn.Top, $wa.Bottom - $h)); $musInn.SetBounds($musInn.Left, $y, $musInn.Width, $h) }
+    $musInnPanel.Invalidate()
 }
-function Mus-Tekst-Sett([string]$t, [bool]$dempet) { $musInnTb.ForeColor = $(if ($dempet) { $cDempet } else { $cTekst }); $musInnTb.Text = $t -replace "`r?`n", "`r`n"; Mus-Størr }
-function Mus-Nullstill { $script:musSvar = $false; $script:musSvarFerdig = $false; $musInnTb.ReadOnly = $false; $musInnTb.ForeColor = $cTekst }
 $musInnTb.Add_TextChanged({ if ($musInn.Visible) { Mus-Størr } })
-function Skjul-MusInn { $script:musInnLukker = $true; Mus-Nullstill; $musInn.Hide(); $script:musInnLukker = $false }
+$musInnTb.Add_GotFocus({ $musInnPanel.Invalidate() }); $musInnTb.Add_LostFocus({ $musInnPanel.Invalidate() })
+# Blinkende strek i det tomme feltet + lys kant mens du skriver: tydelig at det er her tastene havner.
+$musBlinkKlokke = New-Object Windows.Forms.Timer; $musBlinkKlokke.Interval = 530
+$musBlinkKlokke.Add_Tick({ if ($musInn.Visible) { $script:musBlink = -not $script:musBlink; if (-not $musInnTb.Text) { $musInnPanel.Invalidate() } } })
+$musBlinkKlokke.Start()
+function Skjul-MusInn { $script:musInnLukker = $true; $musInn.Hide(); $script:musInnLukker = $false }
 function Vis-MusInn {
     $c = [Windows.Forms.Cursor]::Position
     if ($null -eq $script:musX) { $m = Mus-Mål $c.X $c.Y 40 40 ([Windows.Forms.Screen]::FromPoint($c).WorkingArea); $mx = $m[0]; $my = $m[1] } else { $mx = [int]$script:musX; $my = [int]$script:musY }
     $wa = [Windows.Forms.Screen]::FromPoint($c).WorkingArea
-    Mus-Nullstill; $musInnTb.Text = ''; $musInn.Height = S 44
+    $musInnTb.Text = ''; $musInn.Height = S 44; $script:musBlink = $true
     $x = $mx + 44; if ($x + $musInn.Width -gt $wa.Right) { $x = [Math]::Max($wa.Left, $mx - 4 - $musInn.Width) }
     $y = [Math]::Min([Math]::Max($wa.Top, $my + 20 - [int]($musInn.Height / 2)), $wa.Bottom - $musInn.Height)
     $musInn.Location = New-Object Drawing.Point($x, $y); $musInn.Show(); Mus-Størr; [Vin]::Topp($musInn)
     [void][Vin]::SetForegroundWindow($musInn.Handle); $musInn.Activate(); $musInnTb.Focus()
     if ([Vin]::GetForegroundWindow() -ne $musInn.Handle) { Skjul-MusInn; Skjul-Mentor }   # fikk ikke fokus: lukk i stedet for å la bildet bli liggende
 }
-# Enter: spørsmålet sendes og svaret skrives i samme felt (feltet vokser). Får ikke spørsmålet gå av gårde, står teksten igjen.
+# Enter: skrivefeltet lukkes og bindersen svarer i en taleboks. Får ikke spørsmålet gå av gårde, åpnes feltet igjen med teksten.
 function Mus-Spør {
     $q = $musInnTb.Text; $inn.Text = $q
-    $script:musSvar = $true; $script:musSvarFerdig = $false; $musInnTb.ReadOnly = $true; Mus-Tekst-Sett 'Tenker …' $true
+    Skjul-Boble; Skjul-MusInn; $script:musSvar = $true
     Send-Spørsmål 'spor'
-    if (-not $script:jobb) { Mus-Nullstill; Mus-Tekst-Sett $q $false; $musInnTb.SelectionStart = $musInnTb.Text.Length }
+    if (-not $script:jobb) { $script:musSvar = $false; Vis-MusInn; $musInnTb.Text = $q; $musInnTb.SelectionStart = $musInnTb.Text.Length }
 }
 $musInnTb.Add_KeyDown({
-    $ks = $_.KeyCode.ToString()
-    if ($script:musSvarFerdig -and $ks -ne 'Escape') {   # svaret står i feltet: Enter eller tasting starter et nytt spørsmål (Ctrl+C og piltaster rører ikke svaret)
-        $nytt = -not ($ks -in 'ControlKey', 'ShiftKey', 'Menu', 'Up', 'Down', 'Left', 'Right', 'PageUp', 'PageDown', 'Home', 'End') -and -not ($_.Control -and $ks -in 'C', 'A')
-        if ($nytt) { Mus-Nullstill; $musInnTb.Text = ''; if ($ks -eq 'Return' -and -not $_.Control) { $_.SuppressKeyPress = $true; return } }
-    }
+    $ks = $_.KeyCode.ToString()   # Enter heter «Return» i .NET
     if ($ks -eq 'Return' -and $_.Shift -and -not $_.Control) { $musInnTb.SelectedText = "`r`n"; $_.SuppressKeyPress = $true }   # Shift+Enter: ny linje
     elseif ($ks -eq 'Return' -and $script:jobb) { $_.SuppressKeyPress = $true; Sett-Toast 'Bindy tenker. Prøv igjen om et øyeblikk.' }
     elseif ($ks -eq 'Return') { $_.SuppressKeyPress = $true; if ($_.Control) { $inn.Text = $musInnTb.Text; Skjul-MusInn; Send-Spørsmål 'start' } else { Mus-Spør } }
     elseif ($ks -eq 'Escape') { $_.SuppressKeyPress = $true; Skjul-MusInn; Skjul-Mentor }
 })
 $musInn.Add_Deactivate({ if ($musInn.Visible -and -not $script:musInnLukker) { Skjul-MusInn; Skjul-Mentor } })   # klikket bort: bildet slettes
+
+# ---- Snakkeboble: bindersen «snakker» med korte, enkle setninger i en liten taleboks. Klikk på boblen skjuler den. ----
+$bobl = New-Object Boble; $bobl.BackColor = $cInnFlate; $bobl.AccessibleName = 'Bindy sier'; $bobl.Cursor = 'Hand'
+$script:bTekst = ''; $script:bVenstre = $true; $script:bHaleY = 20; $script:bW = 0; $script:bH = 0; $script:bTil = $null; $script:bPos = $null
+$script:bHale = [int](S 9)
+function Boble-Sti([int]$w, [int]$h, [bool]$haleVenstre, [int]$ty) {   # avrundet boks med en liten hale mot bindersen
+    $t = $script:bHale; $x0 = $t; $bw = $w - $t; $d = [Math]::Min((S 32), $h)
+    $ty = [Math]::Max([int]($d / 2 + 7), [Math]::Min($h - [int]($d / 2) - 7, $ty))
+    $p = New-Object Drawing.Drawing2D.GraphicsPath
+    $p.AddArc($x0 + 0.75, 0.75, $d, $d, 180, 90); $p.AddArc($x0 + $bw - $d - 1.5, 0.75, $d, $d, 270, 90); $p.AddArc($x0 + $bw - $d - 1.5, $h - $d - 1.5, $d, $d, 0, 90); $p.AddArc($x0 + 0.75, $h - $d - 1.5, $d, $d, 90, 90)
+    if ($haleVenstre) { $p.AddLine($x0 + 0.75, $h - $d / 2, $x0 + 0.75, $ty + 7); $p.AddLine($x0 + 0.75, $ty + 7, 0.75, $ty); $p.AddLine(0.75, $ty, $x0 + 0.75, $ty - 7) }
+    else { $p.AddLine($x0 + 0.75, $h - $d / 2, $x0 + 0.75, $ty + 7); $p.AddLine($x0 + 0.75, $ty + 7, 0.75, $ty); $p.AddLine(0.75, $ty, $x0 + 0.75, $ty - 7) }
+    $p.CloseFigure()
+    if (-not $haleVenstre) { $m = New-Object Drawing.Drawing2D.Matrix(-1, 0, 0, 1, $w - 1.5, 0); $p.Transform($m); $m.Dispose() }
+    return $p
+}
+function Boble-Sett([string]$tekst) {
+    $tekst = ($tekst -replace '\*\*|`', '').Trim(); if (-not $tekst) { return }
+    $script:bTekst = $tekst; $script:bTil = $(if ($script:vei -or $script:kallModus -eq 'start' -or $script:kallModus -eq 'sjekk') { $null } else { [DateTime]::Now.AddSeconds(60) })
+    $t = $script:bHale; $maksT = S 270; $padV = S 10
+    $m = [Windows.Forms.TextRenderer]::MeasureText($tekst, $fTekst, (New-Object Drawing.Size($maksT, 0)), [Windows.Forms.TextFormatFlags]::WordBreak -bor [Windows.Forms.TextFormatFlags]::NoPadding)
+    $w = $m.Width + (S 18) + (S 26) + $t + 2; $h = [Math]::Max((S 40), $m.Height + 2 * $padV + 2)
+    if ($w -ne $script:bW -or $h -ne $script:bH) { $script:bW = $w; $script:bH = $h; $script:bPos = $null; $bobl.Size = New-Object Drawing.Size($w, $h) }
+    $bobl.Invalidate(); Boble-Plasser $true; if (-not $bobl.Visible) { $bobl.Show(); [Vin]::Topp($bobl) }
+}
+function Skjul-Boble { $script:bTekst = ''; $script:bTil = $null; if ($bobl.Visible) { $bobl.Hide() } }
+# Plasserer boblen ved siden av bindersen (følgeren), eller ved siden av målet under veiledning. Kalles hver tikk; flytter bare når noe har endret seg.
+function Boble-Plasser([bool]$tving) {
+    if (-not $script:bTekst) { return }
+    $c = [Windows.Forms.Cursor]::Position; $wa = [Windows.Forms.Screen]::FromPoint($c).WorkingArea
+    if ($script:vei -and $script:mål -and $peker.Visible) { $ax = $script:mål[0]; $ay = $script:mål[1]; $aw = $script:mål[2] - $script:mål[0]; $ah = $script:mål[3] - $script:mål[1]; $wa = [Windows.Forms.Screen]::FromRectangle((New-Object Drawing.Rectangle($ax, $ay, [Math]::Max(1, $aw), [Math]::Max(1, $ah)))).WorkingArea }
+    elseif ($peker.Visible) { $ax = $script:px - 20; $ay = $script:py - 20; $aw = 40; $ah = 40 }
+    elseif ($null -ne $script:musX) { $ax = [int]$script:musX; $ay = [int]$script:musY; $aw = 40; $ah = 40 }
+    else { $ax = $c.X + 32; $ay = $c.Y + 32; $aw = 40; $ah = 40 }
+    $hv = ($ax + $aw + 6 + $script:bW -le $wa.Right)   # plass til høyre for ikonet/målet?
+    $x = $(if ($hv) { $ax + $aw + 2 } else { $ax - 2 - $script:bW })
+    $y = [Math]::Min([Math]::Max($wa.Top, $ay + [int]($ah / 2) - [int]($script:bH / 2)), $wa.Bottom - $script:bH)
+    $x = [Math]::Max($wa.Left, [Math]::Min($x, $wa.Right - $script:bW))
+    $hy = $ay + [int]($ah / 2) - $y
+    $nyPos = "$x,$y,$hv,$hy"
+    if (-not $tving -and $nyPos -eq $script:bPos) { return }
+    $form1 = ($script:bVenstre -ne $hv) -or ($hy -ne $script:bHaleY) -or $tving
+    $script:bPos = $nyPos; $script:bVenstre = $hv; $script:bHaleY = $hy
+    if ($form1) { $sti = Boble-Sti $script:bW $script:bH $hv $hy; $r = $bobl.Region; $bobl.Region = New-Object Drawing.Region($sti); if ($r) { $r.Dispose() }; $sti.Dispose(); $bobl.Invalidate() }
+    $bobl.Location = New-Object Drawing.Point($x, $y)
+}
+$bobl.Add_Paint({ param($snd, $ev)
+    if (-not $script:bTekst) { return }
+    $g = $ev.Graphics; $g.SmoothingMode = 'AntiAlias'
+    $sti = Boble-Sti $script:bW $script:bH $script:bVenstre $script:bHaleY
+    $bk = New-Object Drawing.SolidBrush($cInnFlate); $g.FillPath($bk, $sti); $bk.Dispose()
+    $pn = New-Object Drawing.Pen((Farge '#8f87c2'), 1.5); $pn.LineJoin = 'Round'; $g.DrawPath($pn, $sti); $pn.Dispose(); $sti.Dispose()
+    $t = $script:bHale; $x0 = $(if ($script:bVenstre) { $t } else { 0 })
+    [Windows.Forms.TextRenderer]::DrawText($g, $script:bTekst, $fTekst, (New-Object Drawing.Rectangle(($x0 + (S 14)), (S 10), ($script:bW - $t - (S 14) - (S 26)), ($script:bH - (S 14)))), $cTekst, [Windows.Forms.TextFormatFlags]::WordBreak -bor [Windows.Forms.TextFormatFlags]::NoPadding)
+    $kx = $x0 + $script:bW - $t - (S 18); $ky = (S 11); $q = New-Object Drawing.Pen($cDempet, 1.5); $q.StartCap = 'Round'; $q.EndCap = 'Round'   # liten × (klikk skjuler)
+    $g.DrawLine($q, $kx, $ky, $kx + (S 7), $ky + (S 7)); $g.DrawLine($q, $kx + (S 7), $ky, $kx, $ky + (S 7)); $q.Dispose()
+})
+$bobl.Add_MouseDown({ Skjul-Boble })
+[void][Vin]::Ekskluder($bobl)
 [void][Vin]::Ekskluder($musInn)
 
 # Klokke 2 (700 ms): oppfølgingen under veiledning.
@@ -1856,7 +1929,7 @@ $animKlokke.Add_Tick({
     if ($script:tipsTil -and [DateTime]::Now -gt $script:tipsTil) { $lblTips.Text = $TipsStandard; $script:tipsTil = $null }
     if ($script:toastTil -and [DateTime]::Now -gt $script:toastTil) { $script:toastTil = $null; $tegn = $true }
     if ($tegn -or ($script:jobb -and $trinn)) { $form.Invalidate() }
-    if (($script:toppT = 1 + [int]$script:toppT) % 5 -eq 0) { foreach ($f in @($overlegg, $ramme, $peker, $mus, $musInn)) { [Vin]::Topp($f) } }   # hold tegningen over oppgavelinja og menyer
+    if (($script:toppT = 1 + [int]$script:toppT) % 5 -eq 0) { foreach ($f in @($overlegg, $ramme, $peker, $mus, $musInn, $bobl)) { [Vin]::Topp($f) } }   # hold tegningen over oppgavelinja og menyer
     if ($script:ovShapes -and $overlegg.Visible) {
         $script:ovFrame++; $alder = ([DateTime]::Now - $script:ovStart).TotalSeconds
         if ($alder -lt 1.4 -or $script:ovFrame % 4 -eq 0 -or $script:ovNy) { $script:ovNy = $false; Tegn-Overlegg }
@@ -1875,7 +1948,7 @@ $hk.add_Trykket({ param($id) try {
     if ($id -eq 4) { Neste-Steg; return }
     if ($script:jobb) { return }
     if ($script:pause -and $id -eq 1) { Sett-Toast 'Pauset. Ctrl+Alt+P for å fortsette'; return }
-    $script:kollapsTid = $null
+    $script:kollapsTid = $null; Skjul-Boble
     $svar.Text = ''; $script:svarFull = ''; $script:svarSynlig = $false; $inn.Text = ''
     if ($id -eq 2) {   # bare spørsmål, ingen skjerm
         Sett-Skjerm 'av'
