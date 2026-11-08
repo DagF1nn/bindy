@@ -42,6 +42,8 @@ $script:klippTid = New-Object Collections.ArrayList; $script:klippPinTil = $null
 # Deling av utklippshistorikken med Claude er AV som standard (personvern). Slås på i tray-menyen, valget huskes i en tom fil.
 $script:delFil = Join-Path $Mappe 'bindy-del-utklipp'
 $script:delKlipp = Test-Path $script:delFil
+$script:musFil = Join-Path $Mappe 'bindy-musefolger-av'; $script:musPå = -not (Test-Path $script:musFil)   # musefølger på/av (fila finnes når den er av)
+$script:musFade = 0; $script:musSist = ''
 function Legg-Klipp([string]$t) {
     if ($t.Length -gt 2000) { return }   # sjekk lengden før regex, så enorme kopier ikke fryser lista
     $t = ($t -replace '[\x00-\x08\x0B\x0C\x0E-\x1F]', '').Trim()
@@ -1157,6 +1159,7 @@ function Stopp-Alt {
     if ($j) { try { $j.p.Kill() } catch {}; $script:jobb = $null; $script:bob = 0; $script:strømmer = $false; $inn.Enabled = $true }
     Stopp-Veiledning $null
     Skjul-Ramme; $peker.Hide()
+    $script:musFade = 0
     $lblSer.Text = 'Stoppet'; Oppdater-Ikon; Sett-Toast 'Stoppet'
 }
 $knappStopp.Add_Click({ Stopp-Alt })
@@ -1483,6 +1486,9 @@ $apneKnapp.Add_Click({ $script:fokusNår = $true; Sett-Modus 'full'; Puls })
 $tomKnapp = New-Object Windows.Forms.ToolStripMenuItem('Tøm utklipp'); $tomKnapp.Add_Click({ Tøm-Klipp })
 $delKnapp = New-Object Windows.Forms.ToolStripMenuItem('Del utklipp med Claude'); $delKnapp.CheckOnClick = $true; $delKnapp.Checked = $script:delKlipp
 $delKnapp.Add_CheckedChanged({ $script:delKlipp = $delKnapp.Checked; try { if ($script:delKlipp) { New-Item -ItemType File -Force $script:delFil | Out-Null } else { Remove-Item $script:delFil -ErrorAction SilentlyContinue } } catch {} })
+$musKnapp = New-Object Windows.Forms.ToolStripMenuItem('Musefølger'); $musKnapp.CheckOnClick = $true; $musKnapp.Checked = $script:musPå
+$musKnapp.Add_CheckedChanged({ $script:musPå = $musKnapp.Checked; try { if ($script:musPå) { Remove-Item $script:musFil -ErrorAction SilentlyContinue } else { New-Item -ItemType File -Force $script:musFil | Out-Null } } catch {} })
+[void]$meny.Items.Add($musKnapp)
 [void]$meny.Items.Add($apneKnapp); [void]$meny.Items.Add($tomKnapp); [void]$meny.Items.Add($delKnapp); [void]$meny.Items.Add($pauseKnapp); [void]$meny.Items.Add($stoppKnapp); [void]$meny.Items.Add($glemKnapp)
 [void]$meny.Items.Add('Avslutt Bindy', $null, { $tray.Visible = $false; Stopp-Veiledning $null; $form.Hide(); [Windows.Forms.Application]::Exit() })
 $tray.ContextMenuStrip = $meny
@@ -1581,7 +1587,7 @@ function Mus-Tekst {
     if ($script:strømmer) { return 'Skriver svar…' }
     return "$($script:tenkTekst)…"
 }
-function Tegn-Mus([string]$tekst, [int]$vinkel, [double]$ret) {
+function Tegn-Mus([string]$tekst, [int]$vinkel, [double]$ret, [double]$alfa = 1.0) {
     $b = 40
     if ($tekst) {
         $tmp = [Drawing.Graphics]::FromImage((New-Object Drawing.Bitmap(1, 1)))
@@ -1596,10 +1602,10 @@ function Tegn-Mus([string]$tekst, [int]$vinkel, [double]$ret) {
     if ($tekst) {
         $pill = New-Object Drawing.Drawing2D.GraphicsPath; $x0 = 44; $w = $b - 44
         $pill.AddArc($x0, 6, 28, 28, 90, 180); $pill.AddArc($x0 + $w - 28, 6, 28, 28, 270, 180); $pill.CloseFigure()
-        $bak = New-Object Drawing.SolidBrush([Drawing.Color]::FromArgb(225, 11, 10, 18)); $g.FillPath($bak, $pill); $bak.Dispose(); $pill.Dispose()
-        $pen = New-Object Drawing.Pen([Drawing.Color]::FromArgb(196, 192, 222), 2); $pen.StartCap = 'Round'; $pen.EndCap = 'Round'
+        $bak = New-Object Drawing.SolidBrush([Drawing.Color]::FromArgb([int](225 * $alfa), 11, 10, 18)); $g.FillPath($bak, $pill); $bak.Dispose(); $pill.Dispose()
+        $pen = New-Object Drawing.Pen([Drawing.Color]::FromArgb([int](196 * $alfa), 192, 222), 2); $pen.StartCap = 'Round'; $pen.EndCap = 'Round'
         $g.DrawArc($pen, $x0 + 9, 13, 14, 14, $vinkel, 250); $pen.Dispose()
-        $tb = New-Object Drawing.SolidBrush([Drawing.Color]::FromArgb(217, 214, 238)); $sf = New-Object Drawing.StringFormat; $sf.LineAlignment = 'Center'
+        $tb = New-Object Drawing.SolidBrush([Drawing.Color]::FromArgb([int](217 * $alfa), 214, 238)); $sf = New-Object Drawing.StringFormat; $sf.LineAlignment = 'Center'
         $g.DrawString($tekst, $fSmå, $tb, (New-Object Drawing.RectangleF(($x0 + 30), 6, ($b - $x0 - 30), 28)), $sf); $tb.Dispose(); $sf.Dispose()
     }
     $g.Dispose(); return $bmp
@@ -1609,14 +1615,16 @@ $script:musRet = -90.0; $script:musRetMål = -90.0; $script:musStille = 0; $scri
 $musKlokke = New-Object Windows.Forms.Timer
 $musKlokke.Interval = 16
 $musKlokke.Add_Tick({
-    if ($script:pause) { if ($script:musVist) { $mus.Hide(); $script:musVist = $false; $script:musX = $null; $script:musFramme = $false }; return }
+    if ($script:pause -or -not $script:musPå) { if ($script:musVist) { $mus.Hide(); $script:musVist = $false; $script:musX = $null; $script:musFramme = $false }; return }
     if ($musInn.Visible) { return }   # skrivefeltet står ved siden av: bindersen holder seg i ro
     if ($peker.Visible -and $script:jobb) { $script:musX = $script:px - 20; $script:musY = $script:py - 20; $script:musFramme = $false; $script:musRet = -90.0; $peker.Hide() }   # Bindy tenker: bindersen går tilbake til å følge musa (og flyr ut igjen med neste svar)
     if ($peker.Visible) {   # veiledning: det er denne bindersen som flyr til målet (pekeren overtar), og den kommer tilbake herfra når pekeren er ferdig
         if ($script:musVist) { $mus.Hide(); $script:musVist = $false }
         $script:musX = $script:px - 20; $script:musY = $script:py - 20; $script:musFramme = $false; $script:musRet = -90.0; return
     }
-    $tekst = Mus-Tekst; $ny = $false
+    $tekst = Mus-Tekst; $ny = $false; $alfa = 1.0
+    if ($tekst) { $script:musSist = $tekst; $script:musFade = 12 }
+    elseif ($script:musFade -gt 0 -and $script:musSist) { $script:musFade--; $tekst = $script:musSist; $alfa = $script:musFade / 12.0; $ny = $true }   # myk fade ut når tenkingen er ferdig
     if ($tekst) { $script:musVinkel = ($script:musVinkel + 24) % 360; if (-not $script:musBmp -or $script:musTikk++ % 3 -eq 0) { $ny = $true } }
     if ($tekst -ne $script:musTekst) { $script:musTekst = $tekst; $ny = $true }
     $c = [Windows.Forms.Cursor]::Position
