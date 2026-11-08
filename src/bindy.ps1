@@ -1403,7 +1403,7 @@ function Skriv-Fremdrift {
 }
 
 function Start-Veiledning {
-    $script:vei = $true; $script:veiHjelpt = $false; $script:veiSjekk = 0; $script:veiGjort.Clear(); $script:veiPrev = $null; $script:veiStabil = 0
+    $script:veiForrige = $null;     $script:vei = $true; $script:veiHjelpt = $false; $script:veiSjekk = 0; $script:veiGjort.Clear(); $script:veiPrev = $null; $script:veiStabil = 0
     $script:veiUtenAkt = Get-Date; $script:veiSist = Get-Date; $script:veiKlikkTid = $null
     $script:veiKlikkTeller = [MuseKrok]::Teller
     if (-not $script:pause) { [MuseKrok]::Start() }
@@ -1419,13 +1419,16 @@ function Stopp-Veiledning([string]$grunn) {
 
 # Sender et nytt bilde til Claude fordi skjermen har endret seg. $sig er signaturen vi målte rett før.
 function Send-Sjekk($sig, [string]$modell = $ModellSjekk) {
+    $stille = $script:stilleSjekk; $script:stilleSjekk = $false   # settes på nytt rett før kallet, så det aldri henger igjen
     if ($script:veiSjekk -ge $MaksSjekker) { Stopp-Veiledning "Veiledningen stoppet etter $MaksSjekker sjekker."; return }
     $f = Fang-Etter $(if ($script:veiAlle) { 'alle' } else { 'vindu' })
     if (-not $f.ok) { return }
     Bruk-Bilde $f
-    $script:veiSjekk++; $script:veiKlikkTid = $null; $script:veiSist = Get-Date
+    if (-not $stille) { $script:veiSjekk++ }   # stille sjekker (uten klikk) teller ikke mot taket
+    $script:veiKlikkTid = $null; $script:veiSist = Get-Date
     $script:sporring = '(skjermen endret seg)'; $script:kallModus = 'sjekk'; $script:kallSig = $sig; $script:alleForsøkt = $script:alle
     $script:tenkTekst = 'Sjekker'
+    $script:stilleSjekk = $stille
     Kjør-Kall 'sjekk' '' $modell
 }
 
@@ -1630,13 +1633,13 @@ function Tegn-Mus([string]$tekst, [int]$vinkel, [double]$ret, [double]$alfa = 1.
     $g.Dispose(); return $bmp
 }
 $script:musTekst = $null; $script:musVinkel = 0; $script:musBmp = $null; $script:musB = 40; $script:musVenstre = $false; $script:musWaR = 99999
-$script:musRefT = 0; $script:musRefX = 0; $script:musRefY = 0
+$script:musRefT = 0; $script:musRefX = [Windows.Forms.Cursor]::Position.X; $script:musRefY = [Windows.Forms.Cursor]::Position.Y
 $script:musRet = -90.0; $script:musRetMål = -90.0; $script:musStille = 0; $script:musCX = 0; $script:musCY = 0
 $musKlokke = New-Object Windows.Forms.Timer
 $musKlokke.Interval = 10
 $script:musSW = [Diagnostics.Stopwatch]::StartNew(); $script:musTid = 0; $script:musTegnT = 0
 [void][Vin]::timeBeginPeriod(1)
-$musKlokke.Add_Tick({
+$musKlokke.Add_Tick({ try {
     $nu = $script:musSW.ElapsedMilliseconds; $dt = [Math]::Min(100, [Math]::Max(1, $nu - $script:musTid)); $script:musTid = $nu
     if ($peker.Visible) { Peker-Steg $dt }
     if ($script:pause -or -not $script:musPå) { if ($script:musVist) { $mus.Hide(); $script:musVist = $false; $script:musX = $null; $script:musFramme = $false }; return }
@@ -1686,7 +1689,7 @@ $musKlokke.Add_Tick({
     $wx = [int][Math]::Round($script:musX) - $vx; $wy = [int][Math]::Round($script:musY)
     if (-not $script:musVist) { $mus.Show(); $mus.Vis($script:musBmp, $wx, $wy); $script:musVist = $true }
     else { $mus.Flytt($wx, $wy) }
-})
+} catch { try { Add-Content (Join-Path $Mappe 'bindy-feil.log') "$(Get-Date -Format s) musefølger: $_" } catch {} } })
 $musKlokke.Start()
 
 # Skrivefeltet som dukker opp ved bindersen når du trykker hurtigtasten. Enter spør, Ctrl+Enter veileder, Esc eller å klikke bort lukker.
@@ -1709,7 +1712,8 @@ function Vis-MusInn {
     if ([Vin]::GetForegroundWindow() -ne $musInn.Handle) { Skjul-MusInn; Skjul-Mentor }   # fikk ikke fokus: lukk i stedet for å la bildet bli liggende
 }
 $musInnTb.Add_KeyDown({
-    if ($_.KeyCode -eq 'Enter') { $_.SuppressKeyPress = $true; $inn.Text = $musInnTb.Text; Skjul-MusInn; Send-Spørsmål $(if ($_.Control) { 'start' } else { 'spor' }) }
+    if ($_.KeyCode -eq 'Enter' -and $script:jobb) { $_.SuppressKeyPress = $true; Sett-Toast 'Bindy tenker. Prøv igjen om et øyeblikk.' }
+    elseif ($_.KeyCode -eq 'Enter') { $_.SuppressKeyPress = $true; $inn.Text = $musInnTb.Text; Skjul-MusInn; Send-Spørsmål $(if ($_.Control) { 'start' } else { 'spor' }) }
     elseif ($_.KeyCode -eq 'Escape') { $_.SuppressKeyPress = $true; Skjul-MusInn; Skjul-Mentor }
 })
 $musInn.Add_Deactivate({ if ($musInn.Visible -and -not $script:musInnLukker) { Skjul-MusInn; Skjul-Mentor } })   # klikket bort: bildet slettes
