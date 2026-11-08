@@ -1810,11 +1810,11 @@ $musInnTb.Add_KeyDown({
     $ks = $_.KeyCode.ToString()
     if ($script:musSvarFerdig -and $ks -ne 'Escape') {   # svaret står i feltet: Enter eller tasting starter et nytt spørsmål (Ctrl+C og piltaster rører ikke svaret)
         $nytt = -not ($ks -in 'ControlKey', 'ShiftKey', 'Menu', 'Up', 'Down', 'Left', 'Right', 'PageUp', 'PageDown', 'Home', 'End') -and -not ($_.Control -and $ks -in 'C', 'A')
-        if ($nytt) { Mus-Nullstill; $musInnTb.Text = ''; if ($ks -eq 'Enter' -and -not $_.Control) { $_.SuppressKeyPress = $true; return } }
+        if ($nytt) { Mus-Nullstill; $musInnTb.Text = ''; if ($ks -eq 'Return' -and -not $_.Control) { $_.SuppressKeyPress = $true; return } }
     }
-    if ($ks -eq 'Enter' -and $_.Shift -and -not $_.Control) { $musInnTb.SelectedText = "`r`n"; $_.SuppressKeyPress = $true }   # Shift+Enter: ny linje
-    elseif ($ks -eq 'Enter' -and $script:jobb) { $_.SuppressKeyPress = $true; Sett-Toast 'Bindy tenker. Prøv igjen om et øyeblikk.' }
-    elseif ($ks -eq 'Enter') { $_.SuppressKeyPress = $true; if ($_.Control) { $inn.Text = $musInnTb.Text; Skjul-MusInn; Send-Spørsmål 'start' } else { Mus-Spør } }
+    if ($ks -eq 'Return' -and $_.Shift -and -not $_.Control) { $musInnTb.SelectedText = "`r`n"; $_.SuppressKeyPress = $true }   # Shift+Enter: ny linje
+    elseif ($ks -eq 'Return' -and $script:jobb) { $_.SuppressKeyPress = $true; Sett-Toast 'Bindy tenker. Prøv igjen om et øyeblikk.' }
+    elseif ($ks -eq 'Return') { $_.SuppressKeyPress = $true; if ($_.Control) { $inn.Text = $musInnTb.Text; Skjul-MusInn; Send-Spørsmål 'start' } else { Mus-Spør } }
     elseif ($ks -eq 'Escape') { $_.SuppressKeyPress = $true; Skjul-MusInn; Skjul-Mentor }
 })
 $musInn.Add_Deactivate({ if ($musInn.Visible -and -not $script:musInnLukker) { Skjul-MusInn; Skjul-Mentor } })   # klikket bort: bildet slettes
