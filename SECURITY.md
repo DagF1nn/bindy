@@ -10,8 +10,8 @@ Bindy er ikke vanlig programvare: for å tegne over Startmenyen trenger den **UI
 
 1. Lager et selvsignert kodesigneringssertifikat (`CN=Bindy lokal signering`) og signerer `BindyStart.exe`.
 2. Legger sertifikatet i maskinens **Root**- og **TrustedPublisher**-lager. Alt som signeres med nøkkelen blir dermed betrodd på maskinen.
-3. **Sletter den private nøkkelen** rett etter signeringen, så ingen kan signere noe annet med den.
-4. Kopierer `BindyStart.exe` og `bindy.ps1` til `C:\Program Files\Bindy\` (bare administrator kan endre dem).
+3. **Sletter sertifikatet og den private nøkkelen** (`Remove-Item -DeleteKey`) rett etter signeringen, også ved feil, så ingen kan signere noe annet med den. Nøkkelen er laget ikke-eksporterbar og lever bare mens skriptet kjører.
+4. Kopierer kildene til `C:\Program Files\Bindy\staging` (bare administrator kan skrive der), bygger og viser SHA-256 derfra, og signerer og kopierer **den samme kopien** til `C:\Program Files\Bindy\`. Ingen vanlig prosess kan bytte filene mellom hash-visningen og signeringen. Sammenlign likevel `bindy.ps1`-summen med den på utgivelsessiden.
 
 Dette betyr:
 
@@ -23,8 +23,8 @@ Dette betyr:
 
 - Ingen nettverkskall bortsett fra de `claude` selv gjør. Bindy har ingen egen server og ingen egen telemetri.
 - Ingen taster registreres. Under veiledning leses bare *hvor* og *når* du klikker med venstre museknapp.
-- Skjermbilder lagres aldri på disk.
-- Claude får **ingen verktøy** (ikke filer, ikke nett, ikke kommandolinje) i kallene Bindy gjør.
+- Bindy skriver aldri skjermbilder til disk. Den ber også Claude Code om ikke å lagre økten (`--no-session-persistence`).
+- Claude får **ingen verktøy** (`--tools ""`: ikke filer, ikke nett, ikke kommandolinje) og leser ingen innstillinger eller hooks fra mapper (`--setting-sources ""`). Bindy starter bare en **programfil** `claude` (aldri `.cmd` eller `.ps1`) og fjerner `NODE_OPTIONS` fra miljøet til den.
 - Bindy limer aldri inn noe uten at du trykker «Lim inn», og nekter å lime inn i passord- og bankvinduer.
 
 ## Kjente begrensninger

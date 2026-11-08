@@ -12,7 +12,7 @@
 |---|---|
 | `src/bindy.ps1` | Hele programmet (WinForms, tegning, parsing av Claude-svar, veiledning) |
 | `host/BindyHost.cs`, `host/app.manifest` | Signert starter: kjører `bindy.ps1` inni seg med `uiAccess` |
-| `scripts/` | `bygg.ps1`, `installer.ps1`, `avinstaller.ps1`, `oppdater.ps1` |
+| `scripts/` | `bygg.ps1`, `installer.ps1`, `avinstaller.ps1` (oppdatering = kjør `installer.ps1` på nytt) |
 
 ## Kjøre og teste
 
@@ -28,7 +28,7 @@ powershell -STA -File src\bindy.ps1            # kjør uten UI-tilgang (tegning 
 - **Programmet kjører med UI-tilgang.** Hver endring skal leses linje for linje. Ingen `Invoke-Expression`, ingen nedlasting av kode, ingen nye avhengigheter uten god grunn.
 - Alt Claude svarer med er **upålitelig input**: valider, begrens lengde og tall (se `Del-Svar`) og legg en test i `-Sjekk`.
 - Claude får ingen verktøy i kallene (`--tools ""`). Endre ikke det uten å skrive hvorfor i `SECURITY.md`.
-- Skjermbilder lagres aldri på disk. Logg aldri innhold du skriver eller ser.
+- Bindy skriver aldri skjermbilder til disk. Logg aldri innhold du skriver eller ser. Merk: `bindy-oppgave.md` inneholder Claudes steg-tekst, som kan komme fra skjermen.
 - Hold `PRIVACY.md` og `SECURITY.md` i takt med koden i samme PR.
 
 ## Utgivelse

@@ -27,15 +27,15 @@ Add-Type -AssemblyName System.Windows.Forms, System.Drawing
 $Mappe  = Join-Path $env:LOCALAPPDATA 'Bindy'   # all lagring ligger her (se PRIVACY.md)
 New-Item -ItemType Directory -Force $Mappe | Out-Null
 $FeilLogg = Join-Path $Mappe 'bindy-feil.log'; if ((Test-Path $FeilLogg) -and (Get-Item $FeilLogg).Length -gt 100000) { Remove-Item $FeilLogg -ErrorAction SilentlyContinue }   # snarvei: kuttes helt ved 100 kB, ingen rotasjon
-$script:ClaudeSti = (Get-Command claude -ErrorAction SilentlyContinue).Source   # slås opp én gang ved oppstart
+$script:ClaudeSti = (Get-Command claude -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1).Source   # slås opp én gang ved oppstart
 $Arbeid = Join-Path $Mappe 'bindy-arbeid'   # tom mappe: Claude leser ingen CLAUDE.md
 $Notat  = Join-Path $Mappe 'bindy-oppgave.md'
 New-Item -ItemType Directory -Force $Arbeid | Out-Null
 $MaksBredde = 1280; $MaksBreddeAlle = 2000
 $ModellSpør = 'sonnet'; $ModellSjekk = 'haiku'   # haiku er raskere og billigere til «er steget gjort?»
 $MaksSjekker = 30; $StoppEtterMin = 5
-$Sperret = 'passord|password|bank|bankid|vipps|vaultwarden|bitwarden|1password|keepass|lastpass|innlogging|logg inn|logg på|sign in|log in|id-porten|altinn|dnb|nordea|sparebank|handelsbanken|skatteetaten|helsenorge|paypal|revolut|nordnet|metamask|credential|windows-sikkerhet'
-$SperretProsess = 'keepass|keepassxc|1password|bitwarden|lastpass|bankid'
+$Sperret = 'passord|password|bank|bankid|vipps|vaultwarden|bitwarden|1password|keepass|lastpass|innlogging|logg inn|logg på|sign in|log in|id-porten|altinn|dnb|nordea|sparebank|handelsbanken|skatteetaten|helsenorge|paypal|revolut|nordnet|metamask|credential|windows-sikkerhet|wallet|lommebok|binance|coinbase|nettbank|sbanken|authenticator|seed phrase|recovery phrase|2fa'
+$SperretProsess = 'keepass|keepassxc|1password|bitwarden|lastpass|bankid|nordpass|dashlane|enpass|protonpass|authy'
 $script:klipp = New-Object Collections.ArrayList; $script:klippN = 0; $script:klippSendt = @(); $script:klippSist = $null; $script:klippSekv = 0; $script:sistFremme = [IntPtr]::Zero; $script:anbefalt = $false
 $script:klippTid = New-Object Collections.ArrayList; $script:klippPinTil = $null; $script:klippSkjulTid = $null
 # Utklippshistorikk: bare i minnet, maks 8 kopier, nyeste først. snarvei: polling hvert sekund i stedet for en utklippslytter, byttes ved behov.
@@ -534,12 +534,13 @@ function Start-Claude([string]$spørsmål, [byte[]]$jpeg, [string]$modell) {
     $psi = New-Object Diagnostics.ProcessStartInfo
     if (-not $script:ClaudeSti) { throw 'Fant ikke claude. Installer Claude Code og legg den i PATH (se docs/INSTALLASJON.md), start så Bindy på nytt.' }
     $psi.FileName = $script:ClaudeSti
+    [void]$psi.EnvironmentVariables.Remove('NODE_OPTIONS')   # ingen injisert kode i claude via Node-innstillinger
     $psi.WorkingDirectory = $Arbeid
     $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true
     $psi.RedirectStandardInput = $true; $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true
     $psi.StandardOutputEncoding = [Text.Encoding]::UTF8
     $psi.Arguments = "--print --model $modell --input-format stream-json --output-format stream-json --verbose --include-partial-messages " +
-        '--strict-mcp-config --disable-slash-commands --setting-sources project --system-prompt "' + $Systemprompt + '" ' +
+        '--strict-mcp-config --disable-slash-commands --setting-sources "" --no-session-persistence --system-prompt "' + $Systemprompt + '" ' +
         '--tools ""'   # ingen verktøy i det hele tatt (hvitliste), ikke svarteliste
     $p = [Diagnostics.Process]::Start($psi)
     $feil = $p.StandardError.ReadToEndAsync()
@@ -616,6 +617,7 @@ function Del-Svar([string]$svar) {
 }
 # Det som vises mens svaret strømmer inn: uten styrelinjer og halvferdige koder.
 function Rens-Delvis([string]$t) {
+    if ($t.Length -gt 20000) { $t = $t.Substring(0, 20000) }
     $t = $t -replace '(?im)^[ \t]*(STATUS|BEHOV):[^\r\n]*(\r?\n|$)', '' -replace '\[\[(MARKER|LIM|SKRIV|VALG|PEKER|PIL|RAMME|SIRKEL|NR|TEKST)[^\]]{0,200}\]\]', '' -replace '\[\[?[^\]]{0,200}$', '' -replace '\*\*|`', ''
     return $t.Trim()
 }
@@ -1214,7 +1216,8 @@ $knappPause.Add_Click({ Sett-Pause (-not $script:pause) })
 
 # ---------------------------------------------------------------- lenker og svar
 
-$UrlRegex = '(?i)\b(?:https?://[^\s<>")\]*`]+|(?:www\.)?[a-z0-9][a-z0-9-]*(?:\.[a-z0-9-]+)*\.(?:com|org|net|no|io|dev|app|co|uk|eu|se|de)(?:/[^\s<>")\]*`]*)?)'
+$UrlRegex = '(?i)\b(?:https?://[^\s<>")\]*`]{1,300}|(?:www\.)?(?:[a-z0-9][a-z0-9-]{0,40}\.){1,4}(?:com|org|net|no|io|dev|app|co|uk|eu|se|de)\b(?:/[^\s<>")\]*`]{0,300})?)'
+$UrlRegexObj = New-Object Text.RegularExpressions.Regex($UrlRegex, 'None', [TimeSpan]::FromMilliseconds(250))   # tidsavbrudd mot ReDoS
 function Sett-Tips([string]$t) { $lblTips.Text = $t; $script:tipsTil = [DateTime]::Now.AddSeconds(6) }
 # Ser etter nye kopier (hopper over passordbehandlere og sperrede vinduer, og kopier markert som private).
 function Les-Utklipp {
@@ -1246,9 +1249,9 @@ function Lim-Inn([int]$i = -1) {
     [void][Vin]::SetForegroundWindow($mål); Start-Sleep -Milliseconds 200
     if ([Vin]::GetForegroundWindow() -ne $mål) { Sett-Tips 'Kopiert. Trykk Ctrl+V selv.'; return }
     $mt2 = New-Object Text.StringBuilder 256; [void][Vin]::GetWindowText([Vin]::GetForegroundWindow(), $mt2, 256)
-    if ($mt2.ToString() -ne $mt.ToString() -or (Sperre-Grunn $mål $mt2.ToString())) { Sett-Tips 'Kopiert, men vinduet endret seg. Trykk Ctrl+V selv.'; return }
+    if ([Vin]::GetForegroundWindow() -ne $mål -or $mt2.ToString() -ne $mt.ToString() -or (Sperre-Grunn $mål $mt2.ToString())) { Sett-Tips 'Kopiert, men vinduet endret seg. Trykk Ctrl+V selv.'; return }
     $pidM = 0; [void][Vin]::GetWindowThreadProcessId($mål, [ref]$pidM); $pnM = (Get-Process -Id $pidM -ErrorAction SilentlyContinue).ProcessName
-    if ($pnM -match '^(WindowsTerminal|wt|conhost|powershell|pwsh|cmd|alacritty|mintty|wezterm|kitty|herdr)$') { Sett-Tips 'Kopiert. Terminalvinduer limes ikke inn automatisk: trykk Ctrl+V selv.'; return }
+    if ($pnM -match '^(WindowsTerminal|wt|conhost|powershell|pwsh|cmd|alacritty|mintty|wezterm|kitty|herdr|Code|Cursor|Windsurf|devenv|idea64|pycharm64)$') { Sett-Tips 'Kopiert. Terminalvinduer limes ikke inn automatisk: trykk Ctrl+V selv.'; return }
     if ([Vin]::ErHevet($mål)) { Sett-Tips 'Kopiert. Vinduet kjører som administrator, så Bindy limer ikke inn dit. Trykk Ctrl+V selv.'; return }
     [Windows.Forms.SendKeys]::SendWait('^v'); $script:anbefalt = $false; Skjul-Klipp; Sett-Toast 'Limt inn'
 }
@@ -1268,7 +1271,7 @@ function Sett-Svar([string]$tekst, [bool]$skriv) {
     $tekst = ($tekst -replace '\*\*|`', '') -replace "`r?`n", "`r`n"   # fjerner markdown-rester
     $script:svarFull = $tekst; $script:visN = $(if ($skriv) { 0 } else { $tekst.Length })
     $svar.Text = $(if ($skriv) { '' } else { $tekst })
-    $lenker = [regex]::Matches($tekst, $UrlRegex)
+    $lenker = @(); try { $lenker = $UrlRegexObj.Matches($(if ($tekst.Length -gt 5000) { $tekst.Substring(0, 5000) } else { $tekst })) } catch {}
     if ($lenker.Count -gt 0) {
         Sett-Tips 'Klikk en lenke i svaret for å kopiere den.'
     }

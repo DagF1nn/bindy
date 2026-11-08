@@ -70,7 +70,7 @@ Du skal få `OK` tilbake. Virker ikke dette, vil ikke Bindy virke heller.
    ```powershell
    Get-FileHash .\Bindy-x.y.z.zip -Algorithm SHA256
    ```
-2. Pakk ut til en mappe **du eier og stoler på**, for eksempel `C:\Users\<deg>\Bindy`. Les gjerne `src\bindy.ps1` først. Det er hele programmet, i klartekst.
+2. Pakk ut til en mappe, for eksempel `C:\Users\<deg>\Bindy`. Les gjerne `src\bindy.ps1` først. Det er hele programmet, i klartekst. Installasjonen kopierer filene til en mappe bare administrator kan skrive i, før den viser summene og signerer, så det er den kopien som blir installert.
 3. Åpne **PowerShell som administrator** (Win+X, «Terminal (administrator)») og kjør:
    ```powershell
    powershell -ExecutionPolicy Bypass -File .\scripts\installer.ps1
@@ -78,7 +78,7 @@ Du skal få `OK` tilbake. Virker ikke dette, vil ikke Bindy virke heller.
 4. Skriptet gjør dette, og ingenting annet:
    - lager et selvsignert kodesigneringssertifikat og signerer `BindyStart.exe` med det,
    - legger sertifikatet som betrodd på denne maskinen (Root og TrustedPublisher),
-   - sletter den private nøkkelen rett etter signeringen,
+   - sletter sertifikatet og den private nøkkelen rett etter signeringen,
    - kopierer `BindyStart.exe` og `bindy.ps1` til `C:\Program Files\Bindy\`,
    - legger Bindy til i oppstart for din bruker (`HKCU\...\Run`).
 5. Start Bindy: `& 'C:\Program Files\Bindy\BindyStart.exe'` (eller logg ut og inn).
@@ -123,4 +123,4 @@ Som administrator:
 powershell -ExecutionPolicy Bypass -File .\scripts\avinstaller.ps1
 ```
 
-Skriptet stopper Bindy, fjerner `C:\Program Files\Bindy`, sertifikatene, oppstartsoppføringen og dataene i `%LOCALAPPDATA%\Bindy`.
+Skriptet stopper Bindy, fjerner `C:\Program Files\Bindy`, sertifikatene, oppstartsoppføringen og filene Bindy selv har laget i `%LOCALAPPDATA%\Bindy` (ukjente filer der blir liggende, og du får beskjed).

@@ -14,13 +14,13 @@ public static class BindyHost {
         string dir = AppDomain.CurrentDomain.BaseDirectory;
         string skript = Path.Combine(dir, "bindy.ps1");
         if (!File.Exists(skript)) return 1;
+        // Ikke last moduler fra brukerens skrivbare mapper: bare Windows egne.
+        Environment.SetEnvironmentVariable("PSModulePath", Path.Combine(Environment.SystemDirectory, @"WindowsPowerShell\v1.0\Modules"));
         Runspace rs = RunspaceFactory.CreateRunspace();
         rs.ApartmentState = ApartmentState.STA;
         rs.ThreadOptions = PSThreadOptions.UseCurrentThread;
         rs.Open();
         Environment.CurrentDirectory = dir;
-        // Ikke last moduler fra brukerens skrivbare mapper: bare Windows egne.
-        Environment.SetEnvironmentVariable("PSModulePath", Path.Combine(Environment.SystemDirectory, @"WindowsPowerShell\v1.0\Modules"));
         try {
             using (Pipeline p = rs.CreatePipeline()) {
                 p.Commands.AddScript("Set-ExecutionPolicy -Scope Process Bypass -Force; & '" + skript.Replace("'", "''") + "'");

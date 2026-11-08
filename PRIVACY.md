@@ -24,11 +24,13 @@ Alt ligger i `%LOCALAPPDATA%\Bindy\`:
 
 | Fil | Innhold |
 |---|---|
-| `bindy-oppgave.md` | Gjeldende mål og fremdrift, i klartekst |
-| `bindy-feil.log` | Feilmeldinger (kan inneholde tekst fra Claude) |
+| `bindy-oppgave.md` | Gjeldende mål og fremdrift, i klartekst. **Inneholder Claudes steg-tekst, som kan referere til det som sto på skjermen** |
+| `bindy-oppgave.forrige.md` | Arkivert kopi av forrige oppgave |
+| `bindy-feil.log` | Feilmeldinger (kan inneholde tekst fra Claude), kuttes ved 100 kB |
+| `bindy-host-feil.log` | Feil fra starteren (`BindyStart.exe`), sjelden |
 | `bindy-del-utklipp` | Tom fil: finnes den, er deling av utklipp på |
 
-**Skjermbilder lagres aldri på disk.** De ligger bare i minnet til de er sendt.
+**Bindy skriver aldri skjermbilder til disk.** De ligger bare i minnet til de er sendt, og Bindy ber Claude Code om ikke å lagre økten (`--no-session-persistence`).
 Utklippshistorikken (maks 8, maks 400 tegn, slettes etter 60 min) ligger bare i minnet.
 
 ## Slett alt
