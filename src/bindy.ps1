@@ -1510,7 +1510,7 @@ function Behandle-Svar($j) {
     $ferdig = $false
     try {
         $d = Del-Svar (Les-Svar ($j.linjer -join "`n") $j.feil.Result)
-        if ($d.behov -and -not $script:alleForsøkt -and -not $script:pause) {   # Claude vil se mer: alle skjermene
+        if ($d.behov -and -not $script:alleForsøkt -and -not $script:pause -and $script:kallModus -ne 'sjekk') {   # Claude vil se mer: alle skjermene (ikke fra automatiske steg-sjekker: der har du ikke bedt om det)
             if (Prøv-Igjen-Alle) { return }
         }
         $stille = $script:stilleSjekk; $script:stilleSjekk = $false
