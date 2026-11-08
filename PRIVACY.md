@@ -7,7 +7,6 @@ Bindy collects nothing itself, has no account and no server. But it does send co
 | When | What is sent | Note |
 |---|---|---|
 | Ctrl+Alt+H and during guidance | Screenshot of the active window (max 1280 px wide) or all screens (max 2000 px) | Captured when you press the hotkey, when "Screen" is on, and **automatically during a guidance you have started**: on click, when the screen changes (also without a click, and also when you switch to another window), and when you have stood still for over 30 s (max 30 images, stops after 5 min without activity). **Claude can also ask to see all screens** when you ask a question, and Bindy then takes the picture without a new confirmation (not from the automatic checks). The block list still applies |
-| When you ask to be shown something in an app | The app is opened, and after about 3.5 seconds a new screenshot is captured automatically and the question is asked again. If the app name is not found, the **names of your installed apps** (max 300) are sent once | Only the names, never paths or files |
 | During guidance | A short note on whether you clicked **inside** or **outside** the marked target, or that no click was registered | Only yes/no, never coordinates or which app |
 | Always | What you type, and the latest questions and answers (max 6, forgotten after 10 min) | |
 | Always | The task note (`bindy-oppgave.md`, max 3000 characters), if it exists | Stored locally, see below |

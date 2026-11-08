@@ -8,7 +8,6 @@ A helper on your screen for Windows. Press a hotkey, ask a question, and Bindy (
 
 - **Ctrl+Alt+H**: ask with a screenshot of the window you are in. **Ctrl+Alt+J**: ask without the screen. All hotkeys can be changed in **Settings** (the gear in the panel, or the tray menu).
 - **Guidance** (Ctrl+Enter or "Guide me"): one step at a time, a frame and a paperclip pointer on the target. If you stand still, it explains more simply. **Ctrl+Alt+N** (or the "Next step" button) moves on.
-- **"Show me in an app":** ask Bindy to show you how to do something in an app, and it opens the app for you and guides you from there.
 - **Choice buttons:** if Claude has to ask something, you get buttons to press instead of typing.
 - **Draws over everything**, including the Start menu and the taskbar.
 - **Clipboard history** (in memory only) that can be pasted with one click.
