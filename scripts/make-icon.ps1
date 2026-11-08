@@ -1,4 +1,4 @@
-# Lager host\bindy.ico (binders på mørk flate). Kjøres bare når ikonet skal endres; resultatet ligger i repoet.
+# Makes host/bindy.ico (a paperclip on a dark surface). Only run when the icon should change; the result is kept in the repo.
 Add-Type -AssemblyName System.Drawing
 $ut = Join-Path (Split-Path $PSScriptRoot) 'host\bindy.ico'
 $png = foreach ($s in 16, 32, 48, 256) {

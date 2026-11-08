@@ -1,127 +1,128 @@
-# Installasjon: få Bindy til å snakke med Claude
+# Installation: get Bindy talking to Claude
 
-Bindy har ingen egen innlogging og ingen API-nøkkel. Den starter Claude Code (`claude`) i bakgrunnen og bruker **din egen** Claude-innlogging. Alt du sender fra Bindy, går dermed via din Claude-konto og teller mot din kvote.
+Bindy has no login of its own and no API key. It starts Claude Code (`claude`) in the background and uses **your own** Claude login. Everything you send from Bindy therefore goes through your Claude account and counts against your quota.
 
-Tid: ca. 15 minutter. Du trenger administrator bare i steg 3.
+Time: about 15 minutes. You only need administrator rights in step 3.
 
-## Krav
+## Requirements
 
-| Hva | Detaljer |
+| What | Details |
 |---|---|
-| Windows | Windows 10 versjon 2004 eller nyere, eller Windows 11. (Claude Code selv krever Windows 10 1809+, men Bindy skjuler egne vinduer fra skjermbilder med en funksjon som kom i 2004.) |
-| PowerShell | Windows PowerShell 5.1 (følger med Windows). Du trenger ikke PowerShell 7. |
-| Claude-konto | Claude **Pro, Max, Ultra, Team, Enterprise** eller Console. Gratisplanen på claude.ai gir ikke Claude Code. |
-| Claude Code | Steg 1 under. |
+| Windows | Windows 10 version 2004 or newer, or Windows 11. (Claude Code itself needs Windows 10 1809+, but Bindy hides its own windows from screenshots with a function introduced in 2004.) |
+| PowerShell | Windows PowerShell 5.1 (ships with Windows). You do not need PowerShell 7. |
+| Claude account | Claude **Pro, Max, Ultra, Team, Enterprise** or Console. The free plan on claude.ai does not include Claude Code. |
+| Claude Code | Step 1 below. |
 
-## Steg 1: Installer Claude Code
+## Step 1: Install Claude Code
 
-Åpne **PowerShell** (vanlig vindu, ikke administrator) og kjør én av disse:
+Open **PowerShell** (a normal window, not administrator) and run one of these:
 
 ```powershell
-# Anbefalt (offisiell installasjon)
+# Recommended (official install)
 irm https://claude.ai/install.ps1 | iex
 
-# eller WinGet
+# or WinGet
 winget install Anthropic.ClaudeCode
 
-# eller npm (krever Node.js 22 eller nyere)
+# or npm (needs Node.js 22 or newer)
 npm install -g @anthropic-ai/claude-code
 ```
 
-Lukk PowerShell og åpne et nytt vindu, så sjekk:
+Close PowerShell, open a new window, then check:
 
 ```powershell
 claude --version
 claude doctor
 ```
 
-`claude --version` skal skrive et versjonsnummer, for eksempel `2.1.x (Claude Code)`.
+`claude --version` should print a version number, for example `2.1.x (Claude Code)`.
 
-**Får du «claude finnes ikke»?** Den offisielle installasjonen legger `claude.exe` i `%USERPROFILE%\.local\bin`, men setter ikke alltid PATH. Rett det slik, og åpne et nytt vindu etterpå:
+**Getting "claude is not recognized"?** The official installer puts `claude.exe` in `%USERPROFILE%\.local\bin` but does not always set PATH. Fix it like this, and open a new window afterwards:
 
 ```powershell
 $p = [Environment]::GetEnvironmentVariable('PATH', 'User')
 [Environment]::SetEnvironmentVariable('PATH', "$p;$env:USERPROFILE\.local\bin", 'User')
 ```
 
-Bindy finner `claude` via PATH, så dette må virke før du går videre.
+Bindy finds `claude` through PATH, so this must work before you continue.
 
-## Steg 2: Logg inn og test at Claude svarer
+## Step 2: Sign in and test that Claude answers
 
 ```powershell
 claude
 ```
 
-Første gang åpnes nettleseren, og du logger inn med Claude-kontoen din. Når du ser `Login successful`, skriv `/exit`.
+The first time, the browser opens and you sign in with your Claude account. When you see `Login successful`, type `/exit`.
 
-Test deretter akkurat den modusen Bindy bruker (uten skjerm, ett svar):
+Then test exactly the mode Bindy uses (no screen, one answer):
 
 ```powershell
-claude -p "Svar med ordet OK"
+claude -p "Answer with the word OK"
 ```
 
-Du skal få `OK` tilbake. Virker ikke dette, vil ikke Bindy virke heller.
+You should get `OK` back. If this does not work, Bindy will not work either.
 
-> **Advarsel om kostnad:** Er miljøvariabelen `ANTHROPIC_API_KEY` satt på maskinen, bruker `claude -p` nøkkelen i stedet for abonnementet ditt, og du betaler per bruk. Sjekk med `echo $env:ANTHROPIC_API_KEY`. Er den tom, bruker Bindy abonnementet.
+> **Cost warning:** If the environment variable `ANTHROPIC_API_KEY` is set on the machine, `claude -p` uses that key instead of your subscription and you pay per use. Check with `echo $env:ANTHROPIC_API_KEY`. If it is empty, Bindy uses your subscription.
 
-## Steg 3: Installer Bindy
+## Step 3: Install Bindy
 
-1. Last ned nyeste utgivelse (`Bindy-x.y.z.zip`) fra **Releases** på GitHub. Sjekk SHA-256-summen mot den som står på utgivelsessiden:
+1. Download the latest release (`Bindy-x.y.z.zip`) from **Releases** on GitHub. Check the SHA-256 sum against the one on the release page:
    ```powershell
    Get-FileHash .\Bindy-x.y.z.zip -Algorithm SHA256
    ```
-2. Pakk ut til en mappe, for eksempel `C:\Users\<deg>\Bindy`. Les gjerne `src\bindy.ps1` først. Det er hele programmet, i klartekst. Installasjonen kopierer filene til en mappe bare administrator kan skrive i, før den viser summene og signerer, så det er den kopien som blir installert.
-3. Åpne **PowerShell som administrator** (Win+X, «Terminal (administrator)») og kjør:
+2. Unzip to a folder, for example `C:\Users\<you>\Bindy`. Do read `src\bindy.ps1` first. It is the whole program, in plain text. The installer copies the files to a folder only an administrator can write to before it shows the sums and signs, so that copy is what gets installed.
+3. Open **PowerShell as administrator** (Win+X, "Terminal (Admin)") and run:
    ```powershell
-   powershell -ExecutionPolicy Bypass -File .\scripts\installer.ps1
+   powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1
    ```
-4. Skriptet gjør dette, og ingenting annet:
-   - lager et selvsignert kodesigneringssertifikat og signerer `BindyStart.exe` med det,
-   - legger sertifikatet som betrodd på denne maskinen (Root og TrustedPublisher),
-   - sletter sertifikatet og den private nøkkelen rett etter signeringen,
-   - kopierer `BindyStart.exe` og `bindy.ps1` til `C:\Program Files\Bindy\`,
-   - legger Bindy til i oppstart for din bruker (`HKCU\...\Run`).
-5. Start Bindy: `& 'C:\Program Files\Bindy\BindyStart.exe'` (eller logg ut og inn).
+4. The script does this, and nothing else:
+   - makes a self-signed code-signing certificate and signs `BindyStart.exe` with it,
+   - makes the certificate trusted on this machine (Root and TrustedPublisher),
+   - deletes the certificate and the private key right after signing,
+   - copies `BindyStart.exe` and `bindy.ps1` to `C:\Program Files\Bindy\`,
+   - adds a Start menu shortcut and adds Bindy to startup for your user (`HKCU\...\Run`).
+5. Start Bindy from the Start menu, or: `& 'C:\Program Files\Bindy\BindyStart.exe'` (or sign out and in).
 
-**Hvorfor administrator og sertifikat?** Windows setter bare tegninger over Startmenyen og oppgavelinja for program som er signert og ligger i en mappe vanlige brukere ikke kan skrive i (`uiAccess`). Les `SECURITY.md` for hva det betyr for sikkerheten.
+**Why administrator and a certificate?** Windows only lets programs draw over the Start menu and taskbar if they are signed and live in a folder ordinary users cannot write to (`uiAccess`). Read `SECURITY.md` for what that means for security.
 
-## Steg 4: Bruk det
+## Step 4: Use it
 
-Du ser en liten binders i tray (nederst til høyre, kanskje under pila for skjulte ikoner).
+You will see a small paperclip in the tray (bottom right, maybe under the arrow for hidden icons).
 
-| Tast | Gjør |
+| Key | Does |
 |---|---|
-| **Ctrl+Alt+H** | Spør med skjermbilde av vinduet du står i |
-| **Ctrl+Alt+J** | Spør uten skjermbilde |
-| **Ctrl+Alt+P** | Pause (stopper all skjermfangst) |
-| **Ctrl+Alt+N** | Neste steg i veiledningen |
-| **Enter** | Send spørsmålet |
-| **Ctrl+Enter** eller **Veiled meg** | Veiledning steg for steg: Bindy peker på det du skal trykke, og sjekker underveis |
-| **Esc** | Lukk panelet |
+| **Ctrl+Alt+H** | Ask with a screenshot of the window you are in |
+| **Ctrl+Alt+J** | Ask without a screenshot |
+| **Ctrl+Alt+P** | Pause (stops all screen capture) |
+| **Ctrl+Alt+N** | Next guidance step |
+| **Enter** | Send the question |
+| **Shift+Enter** | New line in the question box |
+| **Ctrl+Enter** or **Guide me** | Step-by-step guidance: Bindy points at what to click and checks along the way |
+| **Esc** | Close the panel |
 
-Tray-menyen har «Del utklipp med Claude» (av som standard), «Tøm utklipp», «Pause» og «Avslutt Bindy».
+The four global hotkeys can be changed in **Settings** (the gear in the panel, or "Settings…" in the tray menu). Settings also holds the language (English or Norwegian; a change takes effect after restarting Bindy), "Follow the mouse with the binder", "Share clips with Claude" (off by default) and "Start Bindy with Windows". The tray menu also has "Clear clips", "Pause" and "Quit Bindy".
 
-## Feilsøking
+## Troubleshooting
 
-| Problem | Løsning |
+| Problem | Fix |
 |---|---|
-| Ingenting skjer ved Ctrl+Alt+H | Er Bindy startet? Sjekk tray. En annen app kan ha tatt hurtigtasten. |
-| «Noe gikk galt» i panelet | Kjør `claude -p "OK"` i et vanlig vindu. Logg inn på nytt med `claude` hvis innloggingen er utløpt. |
-| «Fant ikke claude» | PATH mangler `%USERPROFILE%\.local\bin` (steg 1). Start Bindy på nytt etter at PATH er rettet. |
-| Tegningen havner bak Startmenyen | Du kjører `bindy.ps1` direkte i stedet for `BindyStart.exe` fra `C:\Program Files\Bindy`. Bare den signerte starteren får UI-tilgang. |
-| Windows SmartScreen advarer | Starteren er selvsignert, ikke kjøpt fra en sertifikatutsteder. Sjekk sjekksummen og velg «Mer info», «Kjør likevel» bare hvis den stemmer. |
-| Feillogg | `%LOCALAPPDATA%\Bindy\bindy-feil.log` |
+| Nothing happens on Ctrl+Alt+H | Is Bindy running? Check the tray. Another app may have taken the hotkey; change it in Settings. |
+| "Something went wrong" in the panel | Run `claude -p "OK"` in a normal window. Sign in again with `claude` if your login has expired. |
+| "Could not find claude" | PATH is missing `%USERPROFILE%\.local\bin` (step 1). Restart Bindy after fixing PATH. |
+| The drawing ends up behind the Start menu | You are running `bindy.ps1` directly instead of `BindyStart.exe` from `C:\Program Files\Bindy`. Only the signed launcher gets UI access. |
+| Windows SmartScreen warns | The launcher is self-signed, not bought from a certificate authority. Check the checksum and choose "More info", "Run anyway" only if it matches. |
+| Error log | `%LOCALAPPDATA%\Bindy\bindy-feil.log` |
 
-## Oppdatering
+## Updating
 
-Last ned ny utgivelse, pakk ut, og kjør `scripts\installer.ps1` som administrator igjen. Det erstatter filene og rydder bort det gamle sertifikatet.
+Download the new release, unzip, and run `scripts\install.ps1` as administrator again. It replaces the files and cleans up the old certificate.
 
-## Avinstallering
+## Uninstalling
 
-Som administrator:
+As administrator:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\scripts\avinstaller.ps1
+powershell -ExecutionPolicy Bypass -File .\scripts\uninstall.ps1
 ```
 
-Skriptet stopper Bindy, fjerner `C:\Program Files\Bindy`, sertifikatene, oppstartsoppføringen og filene Bindy selv har laget i `%LOCALAPPDATA%\Bindy` (ukjente filer der blir liggende, og du får beskjed).
+The script stops Bindy and removes `C:\Program Files\Bindy`, the certificates, the startup entry, the Start menu shortcut and the files Bindy itself has made in `%LOCALAPPDATA%\Bindy` (unknown files there are left alone, and you are told).

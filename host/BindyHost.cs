@@ -1,5 +1,5 @@
-// Kjører bindy.ps1 (fra samme mappe) inni denne prosessen, så skriptets vinduer får denne eksefilas UI-tilgang (uiAccess).
-// Tar ingen argumenter, så ingenting utenfra kan styre hva som kjøres.
+// Runs bindy.ps1 (from the same folder) inside this process, so the script windows get this executable's UI access (uiAccess).
+// Takes no arguments, so nothing from outside can control what is run.
 using System;
 using System.IO;
 using System.Management.Automation;
@@ -9,12 +9,12 @@ using System.Threading;
 public static class BindyHost {
     [STAThread]
     public static int Main() {
-        bool ny; Mutex enkelt = new Mutex(true, @"Local"+(char)92+"BindyStart", out ny);   // bare én Bindy om gangen
+        bool ny; Mutex enkelt = new Mutex(true, @"Local"+(char)92+"BindyStart", out ny);   // only one Bindy at a time
         if (!ny) return 0;
         string dir = AppDomain.CurrentDomain.BaseDirectory;
         string skript = Path.Combine(dir, "bindy.ps1");
         if (!File.Exists(skript)) return 1;
-        // Ikke last moduler fra brukerens skrivbare mapper: bare Windows egne.
+        // Do not load modules from folders the user can write to: only the ones Windows ships.
         Environment.SetEnvironmentVariable("PSModulePath", Path.Combine(Environment.SystemDirectory, @"WindowsPowerShell\v1.0\Modules"));
         Runspace rs = RunspaceFactory.CreateRunspace();
         rs.ApartmentState = ApartmentState.STA;

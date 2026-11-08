@@ -1,40 +1,41 @@
-# Personvern
+# Privacy
 
-Bindy samler ikke inn noe selv, har ingen konto og ingen server. Men den sender innhold til Anthropic via din egen Claude Code-innlogging. Her er nøyaktig hva.
+Bindy collects nothing itself, has no account and no server. But it does send content to Anthropic through your own Claude Code login. Here is exactly what.
 
-## Hva som sendes til Anthropic
+## What is sent to Anthropic
 
-| Når | Hva sendes | Merk |
+| When | What is sent | Note |
 |---|---|---|
-| Ctrl+Alt+H og under veiledning | Skjermbilde av aktivt vindu (maks 1280 px bredt) eller alle skjermer (maks 2000 px) | Fanges når du trykker, når «Skjerm» er på, og **automatisk under en veiledning du har startet**: ved klikk, når skjermen endrer seg (også uten klikk, og også når du bytter til et annet vindu), og når du har stått stille i over 30 s (maks 30 bilder, stopper etter 5 min uten aktivitet). **Claude kan også be om å få se alle skjermer** når du stiller et spørsmål, og Bindy tar da bildet uten ny bekreftelse (ikke fra de automatiske sjekkene). Sperrelista gjelder fortsatt |
-| Under veiledning | Et kort notat om du klikket **inne i** eller **utenfor** det markerte målet, eller at ingen klikk ble registrert | Bare ja/nei, aldri koordinater eller hvilken app |
-| Alltid | Det du skriver, og de siste spørsmålene og svarene (maks 6, glemmes etter 10 min) | |
-| Alltid | Oppgavenotatet (`bindy-oppgave.md`, maks 3000 tegn), hvis det finnes | Lagres lokalt, se under |
-| **Bare hvis du slår på «Del utklipp med Claude»** | De 6 siste kopiene, hver maks 200 tegn | **Av som standard** |
+| Ctrl+Alt+H and during guidance | Screenshot of the active window (max 1280 px wide) or all screens (max 2000 px) | Captured when you press the hotkey, when "Screen" is on, and **automatically during a guidance you have started**: on click, when the screen changes (also without a click, and also when you switch to another window), and when you have stood still for over 30 s (max 30 images, stops after 5 min without activity). **Claude can also ask to see all screens** when you ask a question, and Bindy then takes the picture without a new confirmation (not from the automatic checks). The block list still applies |
+| During guidance | A short note on whether you clicked **inside** or **outside** the marked target, or that no click was registered | Only yes/no, never coordinates or which app |
+| Always | What you type, and the latest questions and answers (max 6, forgotten after 10 min) | |
+| Always | The task note (`bindy-oppgave.md`, max 3000 characters), if it exists | Stored locally, see below |
+| **Only if you turn on "Share clips with Claude"** | The 6 latest copies, each max 200 characters | **Off by default** |
 
-Hva Anthropic gjør med dataene, avgjøres av din Claude-konto og Anthropics egne vilkår og personvernerklæring. Bindy kan ikke styre det.
+What Anthropic does with the data is decided by your Claude account and Anthropic's own terms and privacy policy. Bindy cannot control that.
 
-## Hva som aldri fanges
+## What is never captured
 
-- Vinduer med passord eller bank i tittelen, og passordbehandlere, fanges ikke. «Alle skjermer» nektes når et slikt vindu er synlig. **Dette er en enkel tittelsjekk og ikke en garanti.**
-- Kopier markert som private av passordbehandlere (`ExcludeClipboardContentFromMonitorProcessing`) lagres ikke.
+- Windows with password or banking in the title, and password managers, are not captured. "All screens" is refused when such a window is visible. **This is a simple title check and not a guarantee.**
+- Copies marked private by password managers (`ExcludeClipboardContentFromMonitorProcessing`) are not stored.
 
-## Hva som lagres på maskinen din
+## What is stored on your machine
 
-Alt ligger i `%LOCALAPPDATA%\Bindy\`:
+Everything is in `%LOCALAPPDATA%\Bindy\`:
 
-| Fil | Innhold |
+| File | Contents |
 |---|---|
-| `bindy-oppgave.md` | Gjeldende mål og fremdrift, i klartekst. **Inneholder Claudes steg-tekst, som kan referere til det som sto på skjermen** |
-| `bindy-oppgave.forrige.md` | Arkivert kopi av forrige oppgave |
-| `bindy-feil.log` | Feilmeldinger (kan inneholde tekst fra Claude), kuttes ved 100 kB |
-| `bindy-host-feil.log` | Feil fra starteren (`BindyStart.exe`), sjelden |
-| `bindy-del-utklipp` | Tom fil: finnes den, er deling av utklipp på |
-| `bindy-musefolger-av` | Tom fil: finnes den, er musefølgeren (binders ved musepekeren) slått av |
+| `bindy-oppgave.md` | Current goal and progress, in plain text. **Contains Claude's step text, which may refer to what was on the screen** |
+| `bindy-oppgave.forrige.md` | Archived copy of the previous task |
+| `bindy-settings.json` | Language and hotkeys |
+| `bindy-feil.log` | Error messages (may contain text from Claude), cut at 100 kB |
+| `bindy-host-feil.log` | Errors from the launcher (`BindyStart.exe`), rare |
+| `bindy-del-utklipp` | Empty file: if it exists, sharing clips is on |
+| `bindy-musefolger-av` | Empty file: if it exists, the mouse follower (paperclip by the mouse pointer) is switched off |
 
-**Bindy skriver aldri skjermbilder til disk.** De ligger bare i minnet til de er sendt, og Bindy ber Claude Code om ikke å lagre økten (`--no-session-persistence`).
-Utklippshistorikken (maks 8, maks 400 tegn, slettes etter 60 min) ligger bare i minnet.
+**Bindy never writes screenshots to disk.** They only live in memory until they have been sent, and Bindy asks Claude Code not to store the session (`--no-session-persistence`).
+The clipboard history (max 8, max 400 characters, deleted after 60 min) only lives in memory.
 
-## Slett alt
+## Delete everything
 
-`scripts\avinstaller.ps1` fjerner programmet og mappen over. Eller slett `%LOCALAPPDATA%\Bindy` for hånd.
+`scripts\uninstall.ps1` removes the program and the folder above. Or delete `%LOCALAPPDATA%\Bindy` by hand.

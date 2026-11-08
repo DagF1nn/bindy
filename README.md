@@ -1,52 +1,53 @@
 # Bindy
 
-En hjelper på skjermen for Windows. Du trykker en hurtigtast, stiller et spørsmål, og Bindy (en liten binders i en «øy» øverst på skjermen) svarer med Claude, ut fra det du ser. Under **veiledning** tegner den en ramme og peker på det ene du skal trykke på, ett steg om gangen, og sjekker underveis om du kom riktig.
+A helper on your screen for Windows. Press a hotkey, ask a question, and Bindy (a small paperclip in an "island" at the top of the screen) answers with Claude, based on what you see. During **guidance** it draws a frame and points at the one thing you should click, one step at a time, and checks along the way that you got it right.
 
-> **Status: 0.x, under utvikling.** Teksten i programmet er foreløpig bare på norsk.
+> **Status: 0.x, under development.** The interface is in English by default; Norwegian is available in Settings.
 
-## Hva den gjør
+## What it does
 
-- **Ctrl+Alt+H**: spør med skjermbilde av vinduet du står i. **Ctrl+Alt+J**: spør uten skjerm.
-- **Veiledning** (Ctrl+Enter eller «Veiled meg»): ett steg om gangen, ramme og binders-peker på målet. Står du stille, forklarer den enklere.
-- **Valgknapper:** må Claude spørre om noe, får du knapper å trykke på i stedet for å skrive.
-- **Tegner over alt**, også over Startmenyen og oppgavelinja.
-- **Utklippshistorikk** (bare i minnet) som kan limes inn med ett klikk.
-- Ingen egen konto og ingen API-nøkkel: den bruker **din** Claude Code-innlogging.
+- **Ctrl+Alt+H**: ask with a screenshot of the window you are in. **Ctrl+Alt+J**: ask without the screen. All hotkeys can be changed in **Settings** (the gear in the panel, or the tray menu).
+- **Guidance** (Ctrl+Enter or "Guide me"): one step at a time, a frame and a paperclip pointer on the target. If you stand still, it explains more simply. **Ctrl+Alt+N** (or the "Next step" button) moves on.
+- **Choice buttons:** if Claude has to ask something, you get buttons to press instead of typing.
+- **Draws over everything**, including the Start menu and the taskbar.
+- **Clipboard history** (in memory only) that can be pasted with one click.
+- **Languages:** English (default) and Norwegian.
+- No account and no API key of its own: it uses **your** Claude Code login.
 
-## Slik virker det
+## How it works
 
 ```
-hurtigtast -> skjermbilde (i minnet) -> `claude -p` (din innlogging) -> svar + tegnekoder -> ramme/peker/knapper
+hotkey -> screenshot (in memory) -> `claude -p` (your login) -> answer + drawing codes -> frame/pointer/buttons
 ```
 
-Bindy er ett PowerShell-skript (`src/bindy.ps1`) som kjører inni en liten signert C#-starter (`host/`). Starteren trengs bare for at tegningen skal kunne ligge over Startmenyen (`uiAccess`).
+Bindy is one PowerShell script (`src/bindy.ps1`) that runs inside a small signed C# launcher (`host/`). The launcher is only needed so the drawing can sit above the Start menu (`uiAccess`).
 
-## Installer
+## Install
 
-Se **[docs/INSTALL.md](docs/INSTALL.md)** (ca. 15 min). Kort: installer Claude Code, logg inn, kjør `scripts\installer.ps1` som administrator.
+See **[docs/INSTALL.md](docs/INSTALL.md)** (about 15 minutes). In short: install Claude Code, sign in, and run `scripts\install.ps1` as administrator.
 
-## Før du installerer: les dette
+## Before you install: read this
 
-1. **Skjermbilder og tekst sendes til Anthropic.** Aktivt vindu (eller alle skjermer), det du skriver, og eventuelt utklipp (hvis du slår på deling) går via din egen `claude`-innlogging og teller mot din kvote. Se [PRIVACY.md](PRIVACY.md).
-2. **Installasjonen krever administrator.** Den legger et selvsignert sertifikat som betrodd på maskinen og gir én eksefil UI-tilgang. Det senker en sikkerhetsgrense i Windows. Se [SECURITY.md](SECURITY.md) og les koden først.
-3. **Sperrelista for passord og bank er en enkel tittelsjekk**, ikke en garanti. Ikke bruk Bindy med skjermen full av ting du ikke vil sende.
-4. **Claude kan ta feil.** Piler og tekst kan peke feil. Bindy limer aldri inn noe uten at du trykker «Lim inn».
+1. **Screenshots and text are sent to Anthropic.** The active window (or all screens), what you type, and optionally clipboard items (if you turn sharing on) go through your own `claude` login and count against your quota. See [PRIVACY.md](PRIVACY.md).
+2. **Installation needs administrator rights.** It makes a self-signed certificate trusted on the machine and gives one executable UI access. That lowers a security boundary in Windows. See [SECURITY.md](SECURITY.md) and read the code first.
+3. **The block list for passwords and banking is a simple title check**, not a guarantee. Do not use Bindy with a screen full of things you do not want to send.
+4. **Claude can be wrong.** Arrows and text can point the wrong way. Bindy never pastes anything unless you press "Paste".
 
-## Krav
+## Requirements
 
-Windows 10 (2004+) eller 11, Windows PowerShell 5.1, Claude Code og en Claude-konto (Pro, Max, Team, Enterprise eller Console).
+Windows 10 (2004+) or 11, Windows PowerShell 5.1, Claude Code and a Claude account (Pro, Max, Team, Enterprise or Console).
 
-## Bygge selv
+## Build it yourself
 
 ```powershell
-powershell -File scripts\bygg.ps1        # krever bare csc.exe som følger med Windows
-powershell -STA -File src\bindy.ps1 -Sjekk   # selvsjekk, sender ingenting
+powershell -File scripts\build.ps1               # only needs csc.exe, which ships with Windows
+powershell -STA -File src\bindy.ps1 -Sjekk       # self-check, sends nothing
 ```
 
-## Bidra og rapportere
+## Contribute and report
 
-Se [docs/UTVIKLING.md](docs/UTVIKLING.md). Sårbarheter: se [SECURITY.md](SECURITY.md), ikke åpne en offentlig issue.
+See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md). For vulnerabilities see [SECURITY.md](SECURITY.md); do not open a public issue.
 
-## Lisens
+## License
 
-MIT, se [LICENSE](LICENSE).
+MIT, see [LICENSE](LICENSE).

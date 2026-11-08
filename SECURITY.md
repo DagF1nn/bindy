@@ -1,44 +1,44 @@
-# Sikkerhet
+# Security
 
-## Meld en sårbarhet
+## Report a vulnerability
 
-Ikke åpne en offentlig issue. Bruk **Report a vulnerability** under fanen *Security* i dette repoet (privat melding). Du får svar så fort eieren rekker det. Dette er et fritidsprosjekt uten garanti for svartid.
+Do not open a public issue. Use **Report a vulnerability** under the *Security* tab of this repo (private message). You will get an answer as soon as the owner can. This is a hobby project with no guaranteed response time.
 
-## Hva du gir fra deg ved å installere
+## What you give up by installing
 
-Bindy er ikke vanlig programvare: for å tegne over Startmenyen trenger den **UI-tilgang** (`uiAccess`). Windows krever da at programmet er signert og ligger i en mappe vanlige brukere ikke kan skrive i. Installasjonen gjør derfor, som administrator:
+Bindy is not ordinary software: to draw over the Start menu it needs **UI access** (`uiAccess`). Windows then requires the program to be signed and to live in a folder ordinary users cannot write to. The installer therefore does the following, as administrator:
 
-1. Lager et selvsignert kodesigneringssertifikat (`CN=Bindy lokal signering`) og signerer `BindyStart.exe`.
-2. Legger sertifikatet i maskinens **Root**- og **TrustedPublisher**-lager. Alt som signeres med nøkkelen blir dermed betrodd på maskinen.
-3. **Sletter sertifikatet og den private nøkkelen** (`Remove-Item -DeleteKey`) rett etter signeringen, også ved feil, så ingen kan signere noe annet med den. Nøkkelen er laget ikke-eksporterbar og lever bare mens skriptet kjører.
-4. Kopierer kildene til `C:\Program Files\Bindy\staging` (bare administrator kan skrive der), bygger og viser SHA-256 derfra, og signerer og kopierer **den samme kopien** til `C:\Program Files\Bindy\`. Ingen vanlig prosess kan bytte filene mellom hash-visningen og signeringen. Sammenlign likevel `bindy.ps1`-summen med den på utgivelsessiden.
+1. Makes a self-signed code-signing certificate (`CN=Bindy local signing`) and signs `BindyStart.exe`.
+2. Puts the certificate in the machine's **Root** and **TrustedPublisher** stores. Anything signed with that key is then trusted on the machine.
+3. **Deletes the certificate and the private key** (`Remove-Item -DeleteKey`) right after signing, also on failure, so nobody can sign anything else with it. The key is made non-exportable and only lives while the script runs.
+4. Copies the sources to `C:\Program Files\Bindy\staging` (only an administrator can write there), builds and shows the SHA-256 from there, and signs and copies **the same copy** to `C:\Program Files\Bindy\`. No ordinary process can swap the files between the hash display and the signing. Still compare the `bindy.ps1` sum with the one on the release page.
 
-Dette betyr:
+This means:
 
-- Prosessen kan styre vinduer som kjører som administrator og legge tegninger over alt. Skadelig kode som allerede kjører som deg, kan prøve å misbruke det.
-- Du må stole på koden i utgivelsen du installerer. **Les `src/bindy.ps1` og `host/BindyHost.cs` først.** De er korte nok til å leses.
-- `scripts\avinstaller.ps1` fjerner alt, inkludert sertifikatene.
+- The process can control windows that run as administrator and draw over everything. Malicious code already running as you could try to abuse that.
+- You must trust the code in the release you install. **Read `src/bindy.ps1` and `host/BindyHost.cs` first.** They are short enough to read.
+- `scripts\uninstall.ps1` removes everything, including the certificates.
 
-## Hva Bindy ikke gjør
+## What Bindy does not do
 
-- Ingen nettverkskall bortsett fra de `claude` selv gjør. Bindy har ingen egen server og ingen egen telemetri.
-- Ingen taster registreres. Under veiledning leses bare *hvor* og *når* du klikker med venstre museknapp, og til Claude sendes bare om klikket traff det markerte målet (ja/nei), ikke posisjonen.
-- Bindy skriver aldri skjermbilder til disk. Den ber også Claude Code om ikke å lagre økten (`--no-session-persistence`).
-- Claude får **ingen verktøy** (`--tools ""`: ikke filer, ikke nett, ikke kommandolinje) og leser ingen innstillinger eller hooks fra mapper (`--setting-sources ""`). Bindy starter bare en **programfil** `claude` (aldri `.cmd` eller `.ps1`) og fjerner `NODE_OPTIONS` fra miljøet til den.
-- Bindy limer aldri inn noe uten at du trykker «Lim inn», og nekter å lime inn i passord- og bankvinduer.
+- No network calls other than the ones `claude` itself makes. Bindy has no server and no telemetry of its own.
+- No keys are recorded. During guidance only *where* and *when* you click with the left mouse button is read, and only whether the click hit the marked target (yes/no) is sent to Claude, not the position.
+- Bindy never writes screenshots to disk. It also asks Claude Code not to store the session (`--no-session-persistence`).
+- Claude gets **no tools** (`--tools ""`: no files, no web, no command line) and reads no settings or hooks from folders (`--setting-sources ""`). Bindy only starts an **executable** `claude` (never `.cmd` or `.ps1`) and removes `NODE_OPTIONS` from its environment.
+- Bindy never pastes anything unless you press "Paste", and refuses to paste into password and banking windows.
 
-## Kjente begrensninger
+## Known limitations
 
-- **Sperrelista** for passord og bank er tittel- og prosessnavn-matching. Den slipper gjennom mye. Den er ingen garanti.
-- **Prompt-injeksjon:** tekst på skjermen kan forsøke å styre Claude. Verste utfall er en villedende pil eller tekst. Claude har ingen verktøy å misbruke, men du må selv vurdere det den foreslår.
-- **UI-tilgang** senker grensen mellom vanlige og administrator-vinduer for denne ene prosessen (se over).
-- **Kode som allerede kjører som deg** kan prøve å få egen kode inn i Bindy-prosessen uten å røre `Program Files`: PowerShell kompilerer noen hjelpeklasser (`Add-Type`) til `%TEMP%` ved oppstart, og miljøvariabler og `HKCU` styres av brukeren (for eksempel `COR_PROFILER`). Verten rydder `PSModulePath`, men dette er ikke fullt lukket. Det er en grunn til å bare kjøre Bindy på en maskin du stoler på.
-- Bindy kopierer ikke automatisk lenker. Tekst Claude foreslår limes inn først når du trykker «Lim inn», og aldri i administrator-vinduer, passord- eller bankvinduer.
-- **Claude kan utløse «alle skjermer»:** står det tekst på skjermen som får Claude til å be om å se mer, tar Bindy bilde av alle skjermer uten ny bekreftelse (sperrelista gjelder). Det gjelder spørsmål du selv stiller; de automatiske sjekkene under veiledning kan ikke utløse det. Under veiledning sendes dessuten nye bilder automatisk, også når du bytter vindu.
-- **Innstillingsfiler kan skrives av kode som kjører som deg:** `bindy-del-utklipp`, `bindy-musefolger-av` og `bindy-oppgave.md` i `%LOCALAPPDATA%\Bindy`. Kode som allerede kjører som deg kan dermed slå på deling av utklipp eller legge tekst inn i det Claude får se. Den kan allerede ta skjermbilder selv, så gevinsten er liten, men du bør vite det.
-- Skrivefeltet som kommer ved bindersen tar tastaturfokus når du trykker hurtigtasten. Trykker du den midt i et passordfelt, havner resten av tastetrykkene der.
-- Bindy er ikke revidert av en uavhengig part.
+- **The block list** for passwords and banking is title and process-name matching. It lets a lot through. It is not a guarantee.
+- **Prompt injection:** text on the screen may try to steer Claude. The worst outcome is a misleading arrow or text. Claude has no tools to abuse, but you must judge what it suggests.
+- **UI access** lowers the boundary between ordinary and administrator windows for this one process (see above).
+- **Code already running as you** can try to get its own code into the Bindy process without touching `Program Files`: PowerShell compiles some helper classes (`Add-Type`) to `%TEMP%` at startup, and environment variables and `HKCU` are controlled by the user (for example `COR_PROFILER`). The launcher cleans `PSModulePath`, but this is not fully closed. It is a reason to only run Bindy on a machine you trust.
+- Bindy does not copy links automatically. Text Claude suggests is only pasted when you press "Paste", and never into administrator windows, password or banking windows.
+- **Claude can trigger "all screens":** if text on the screen makes Claude ask to see more, Bindy captures all screens without a new confirmation (the block list still applies). This only applies to questions you ask yourself; the automatic checks during guidance cannot trigger it. During guidance new screenshots are also sent automatically, also when you switch window.
+- **Settings files can be written by code running as you:** `bindy-del-utklipp`, `bindy-musefolger-av`, `bindy-settings.json` and `bindy-oppgave.md` in `%LOCALAPPDATA%\Bindy`. Code already running as you could therefore turn on clipboard sharing, change the hotkeys or put text into what Claude gets to see. It can already take screenshots itself, so the gain is small, but you should know. The settings file is validated when read (language and hotkeys only accept known values).
+- The input box that appears beside the binder takes keyboard focus when you press the hotkey. If you press it in the middle of a password field, the rest of your keystrokes end up there.
+- Bindy has not been audited by an independent party.
 
-## Anbefalt bruk
+## Recommended use
 
-Kjør den bare på en maskin du eier. Ikke installer en utgivelse du ikke har sjekket sjekksummen på. Ikke la den se på vinduer med hemmelig innhold: trykk **Ctrl+Alt+P** (pause) først.
+Only run it on a machine you own. Do not install a release whose checksum you have not checked. Do not let it look at windows with secret content: press **Ctrl+Alt+P** (pause) first.

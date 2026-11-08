@@ -1,25 +1,25 @@
-﻿# Bindy: en liten «øy» øverst på skjermen (som Dynamic Island) med en binders. Den vokser til et panel når du kaller på den.
-#   Ctrl+Alt+H  = spør med skjermbilde av vinduet du står i.   Ctrl+Alt+J  = bare et spørsmål, uten skjerm.
-#   Ctrl+Alt+P  = pause / fortsett (pausen stopper all skjermfangst og musehook).
-#   Ctrl+Alt+N  = neste steg i veiledningen (samme som knappen «Neste steg»).
-#   I panelet: «Skjerm» bytter mellom vindu / alle skjermer / av, «Pause», «Veiled meg» (eller Ctrl+Enter), Enter spør, Esc lukker.
-# Trenger Claude mer enn bildet viser, ber den selv om bilde av alle skjermene (BEHOV: HELE_SKJERMEN), og spørsmålet sendes på nytt.
-# VEILEDNING: Claude gir ett steg om gangen, en binders-peker (musepeker nr. 2) glir dit du skal trykke, og programmet følger
-# med: etter klikk eller skjermendring sendes ett nytt bilde, Claude vurderer om steget er gjort og gir neste steg.
-# Under veiledning blir øya en liten pille øverst med gjeldende steg. Klikk på den for å åpne panelet.
-# Bare Windows PowerShell 5.1 og .NET (WinForms). Kjører Claude Code (Pro-kvoten), ingen API-nøkkel.
-# Personvern: bildet fanges bare ved Ctrl+Alt+H, når «Skjerm» slås på, og under en veiledning du har startet selv. Under
-# veiledning ser du det på bindersen i tray (grønn) og at øya er grønn. Sammenligning av skjermen skjer lokalt på små
-# gråtonebilder som aldri lagres. Musehooken registrerer bare *hvor* du klikket, aldri taster, og kjører bare under veiledning.
-# Vinduer med passord/bank i tittelen eller fra passordbehandlere fanges aldri; bilde av alle skjermer nektes så lenge et slikt vindu er synlig.
-# --setting-sources project: Claude laster ikke brukerens globale CLAUDE.md (ca. 11 000 tokens per kall).
-# Kontekst: skriptet limer inn %LOCALAPPDATA%\Bindy\bindy-oppgave.md (oppgavenotatet) i spørsmålet (Claude har ikke fil-tilgang) og skriver fremdrift nederst i den.
-# Startes av brukeren selv (BindyStart.exe):
-#   powershell -STA -File bindy.ps1          # kjører til du velger Avslutt i tray
-#   powershell -STA -File bindy.ps1 -Sjekk   # selvsjekk uten vindu og uten å sende noe (tegner øya til en png)
-#   powershell -STA -File bindy.ps1 -Prov    # fanger aktivt vindu og sender ÉN gang, skriver svaret
-# snarvei: skjermendring sammenlignes på 32x20 gråtoner; en video i vinduet gjør at «stabil skjerm» aldri inntreffer.
-# Da trigger bare klikk (1,8 s etter). Bør forbedres hvis det blir et problem.
+﻿# Bindy: a small "island" at the top of the screen (like the Dynamic Island) with a paperclip. It grows into a panel when you call on it.
+#   Ctrl+Alt+H  = ask with a screenshot of the window you are in.   Ctrl+Alt+J  = ask without the screen.
+#   Ctrl+Alt+P  = pause / resume (pause stops all screen capture and the mouse hook).
+#   Ctrl+Alt+N  = next guidance step (same as the "Next step" button). All hotkeys can be changed in Settings.
+#   In the panel: "Screen" switches between window / all screens / off, "Pause", "Guide me" (or Ctrl+Enter), Enter asks, Esc closes.
+# If Claude needs more than the picture shows, it asks for a picture of all screens itself (BEHOV: HELE_SKJERMEN), and the question is sent again.
+# GUIDANCE: Claude gives one step at a time, a paperclip pointer (mouse pointer no. 2) glides to where you should click, and the program
+# follows along: after a click or a screen change a new picture is sent, Claude judges whether the step is done and gives the next one.
+# During guidance the island becomes a card at the top with the current step. Click it to open the panel.
+# Only Windows PowerShell 5.1 and .NET (WinForms). Runs Claude Code (your own login), no API key.
+# Privacy: the picture is only captured on Ctrl+Alt+H, when "Screen" is switched on, and during a guidance you started yourself. During
+# guidance you see it on the paperclip in the tray (green) and in the island. Comparing the screen happens locally on small
+# grayscale images that are never stored. The mouse hook only records *where* you clicked, never keys, and only runs during guidance.
+# Windows with passwords/banking in the title or from password managers are never captured; a picture of all screens is refused while such a window is visible.
+# --setting-sources project: Claude does not load the user's global CLAUDE.md (about 11,000 tokens per call).
+# Context: the script pastes %LOCALAPPDATA%\Bindy\bindy-oppgave.md (the task note) into the question (Claude has no file access) and writes progress at the bottom of it.
+# Started by the user (BindyStart.exe):
+#   powershell -STA -File bindy.ps1          # runs until you choose Quit in the tray
+#   powershell -STA -File bindy.ps1 -Sjekk   # self-check without a window and without sending anything (draws the island to a png)
+#   powershell -STA -File bindy.ps1 -Prov    # captures the active window and sends ONE time, prints the answer
+# shortcut: screen change is compared on 32x20 grayscale; a video in the window means "stable screen" never happens.
+# Then only a click triggers (1.8 s after). Should be improved if it becomes a problem.
 
 param([switch]$Sjekk, [switch]$Prov)
 $ErrorActionPreference = 'Stop'
