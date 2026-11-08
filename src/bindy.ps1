@@ -1758,7 +1758,7 @@ $musInn = New-Object InnVindu; $musInn.BackColor = (Farge '#4a4672'); $musInn.Te
 $cInnFlate = Farge '#1a1827'
 $musInnPanel = New-Object Windows.Forms.Panel; $musInnPanel.Dock = 'Fill'; $musInnPanel.BackColor = $cInnFlate; $musInnPanel.Padding = New-Object Windows.Forms.Padding((S 22), (S 11), (S 18), (S 11))
 $musInnTb = New-Object Windows.Forms.TextBox; $musInnTb.BorderStyle = 'None'; $musInnTb.BackColor = $cInnFlate; $musInnTb.ForeColor = $cTekst; $musInnTb.Font = $fTekst; $musInnTb.Dock = 'Fill'
-$musInnTb.Multiline = $true; $musInnTb.WordWrap = $true; $musInnTb.ScrollBars = 'None'; $musInnTb.AcceptsReturn = $false
+$musInnTb.Multiline = $true; $musInnTb.WordWrap = $true; $musInnTb.ScrollBars = 'None'; $musInnTb.AcceptsReturn = $true   # ellers får ikke KeyDown Enter i et felt med flere linjer, og Enter blir bare en ny linje
 $musInnTb.AccessibleName = 'Spør Bindy'
 $musInnHint = New-Object Windows.Forms.Label; $musInnHint.Text = 'Spør (Enter)  ·  veiled (Ctrl+Enter)'; $musInnHint.ForeColor = $cDempet; $musInnHint.BackColor = $cInnFlate; $musInnHint.Font = $fTekst; $musInnHint.AutoSize = $true; $musInnHint.Location = New-Object Drawing.Point((S 22), (S 11)); $musInnHint.AccessibleName = 'Hjelpetekst'
 $musInnHint.Add_Click({ $musInnTb.Focus() })
