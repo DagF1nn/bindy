@@ -1496,13 +1496,14 @@ function Følg-Med {
     if ([MuseKrok]::Teller -ne $script:veiKlikkTeller) {   # nytt klikk
         $script:veiKlikkTeller = [MuseKrok]::Teller
         $kp = New-Object Drawing.Point([MuseKrok]::X, [MuseKrok]::Y)
-        if (-not ($form.Visible -and (Øy-Rekt).Contains($kp))) { $script:veiKlikkTid = $nå; $script:veiKlikkPos = $kp; $script:veiUtenAkt = $nå }
+        $iBoble = $bobl.Visible -and $bobl.Bounds.Contains($kp); if ($bobl.Visible -and -not $iBoble) { Skjul-Boble }   # klikk et annet sted: boblen har gjort jobben
+        if (-not $iBoble -and -not ($form.Visible -and (Øy-Rekt).Contains($kp))) { $script:veiKlikkTid = $nå; $script:veiKlikkPos = $kp; $script:veiUtenAkt = $nå }
     }
     $trigger = $false; $klikk = $false; $note = ''
     if ($script:veiKlikkTid) {
         $v = ($nå - $script:veiKlikkTid).TotalSeconds
         $iMål = $script:mål -and $script:veiKlikkPos.X -ge $script:mål[0] -and $script:veiKlikkPos.X -le $script:mål[2] -and $script:veiKlikkPos.Y -ge $script:mål[1] -and $script:veiKlikkPos.Y -le $script:mål[3]
-        if (($v -ge 1.0 -and $endret -and $rolig) -or ($iMål -and $v -ge 2.0) -or ($v -ge 5 -and $endret)) {
+        if (($v -ge 1.0 -and $endret -and $rolig) -or ($iMål -and $v -ge 0.5) -or ($v -ge 5 -and $endret)) {
             $trigger = $true; $klikk = $true
             $note = $(if ($iMål) { 'brukeren klikket INNE i det markerte målet for steget. ' } else { 'brukeren klikket UTENFOR det markerte målet for steget (kanskje et annet sted som også virker). ' })
         }
@@ -1517,7 +1518,7 @@ function Følg-Med {
         $script:veiHjelpt = $true; $script:ståttNote = 'brukeren har stått stille i over 30 sekunder uten å klikke, så steget var nok uklart. Forklar det enklere, ÉN handling, og pek helt presist (MARKER og PEKER). Svar STATUS: IKKE_GJORT. '
         Send-Sjekk $sig $ModellSjekk; $script:ståttNote = ''; return
     }
-    if ($trigger -and ($nå - $script:veiSist).TotalSeconds -ge 2) {
+    if ($trigger -and ($nå - $script:veiSist).TotalSeconds -ge 1) {
         $script:ståttNote = $note; $script:stilleSjekk = -not $klikk
         Send-Sjekk $sig $(if ($klikk) { $ModellSpør } else { $ModellSjekk }); $script:ståttNote = ''
     }
@@ -1714,7 +1715,7 @@ $script:musSW = [Diagnostics.Stopwatch]::StartNew(); $script:musTid = 0; $script
 $musKlokke.Add_Tick({ try {
     $nu = $script:musSW.ElapsedMilliseconds; $dt = [Math]::Min(100, [Math]::Max(1, $nu - $script:musTid)); $script:musTid = $nu
     if ($peker.Visible) { Peker-Steg $dt }
-    if ($bobl.Visible) { if ($script:bTil -and [DateTime]::Now -gt $script:bTil) { Skjul-Boble } else { Boble-Plasser $false } }   # taleboblen følger bindersen
+    if ($bobl.Visible) { if ($script:bTil -and [DateTime]::Now -gt $script:bTil) { Skjul-Boble } else { Boble-Plasser $false $dt } }   # taleboblen følger bindersen
     if ($script:pause -or -not $script:musPå) { if ($script:musVist) { $mus.Hide(); $script:musVist = $false; $script:musX = $null; $script:musFramme = $false }; return }
     if ($musInn.Visible) { return }   # skrivefeltet står ved siden av: bindersen holder seg i ro
     if ($peker.Visible -and $script:jobb) { $script:musX = $script:px - 20; $script:musY = $script:py - 20; $script:musFramme = $false; $script:musRet = -90.0; $peker.Hide() }   # Bindy tenker: bindersen går tilbake til å følge musa (og flyr ut igjen med neste svar)
@@ -1828,18 +1829,20 @@ $musInnTb.Add_KeyDown({
 })
 $musInn.Add_Deactivate({ if ($musInn.Visible -and -not $script:musInnLukker) { Skjul-MusInn; Skjul-Mentor } })   # klikket bort: bildet slettes
 
-# ---- Snakkeboble: bindersen «snakker» med korte, enkle setninger i en liten taleboks. Klikk på boblen skjuler den. ----
-$bobl = New-Object Boble; $bobl.BackColor = $cInnFlate; $bobl.AccessibleName = 'Bindy sier'; $bobl.Cursor = 'Hand'
-$script:bTekst = ''; $script:bVenstre = $true; $script:bHaleY = 20; $script:bW = 0; $script:bH = 0; $script:bTil = $null; $script:bPos = $null
+# ---- Snakkeboble: bindersen sier korte, enkle setninger. Svar ligger ved bindersen (med hale), veiledning holdes langt unna målet (uten hale). Kan dras; × skjuler. ----
+$bobl = New-Object Boble; $bobl.BackColor = $cInnFlate; $bobl.AccessibleName = 'Bindy sier'; $bobl.Cursor = 'SizeAll'
+$script:bTekst = ''; $script:bVenstre = $true; $script:bUtenHale = $false; $script:bHaleY = 20; $script:bW = 0; $script:bH = 0; $script:bTil = $null
+$script:bX = $null; $script:bY = 0.0; $script:bManuell = $false; $script:bFarNokkel = ''; $script:bFarX = 0; $script:bFarY = 0; $script:bDrar = $false; $script:bStil = ''
 $script:bHale = [int](S 9)
-function Boble-Sti([int]$w, [int]$h, [bool]$haleVenstre, [int]$ty) {   # avrundet boks med en liten hale mot bindersen
-    $t = $script:bHale; $x0 = $t; $bw = $w - $t; $d = [Math]::Min((S 32), $h)
-    $ty = [Math]::Max([int]($d / 2 + 7), [Math]::Min($h - [int]($d / 2) - 7, $ty))
+function Boble-Sti([int]$w, [int]$h, [bool]$haleVenstre, [int]$ty, [bool]$utenHale) {   # avrundet boks, med en liten hale mot bindersen når den ligger ved den
+    $t = $script:bHale; $x0 = $(if ($haleVenstre) { $t } else { 0 }); $bw = $w - $t; $d = [Math]::Min((S 32), $h)
     $p = New-Object Drawing.Drawing2D.GraphicsPath
+    if ($utenHale) {
+        $p.AddArc($x0 + 0.75, 0.75, $d, $d, 180, 90); $p.AddArc($x0 + $bw - $d - 1.5, 0.75, $d, $d, 270, 90); $p.AddArc($x0 + $bw - $d - 1.5, $h - $d - 1.5, $d, $d, 0, 90); $p.AddArc($x0 + 0.75, $h - $d - 1.5, $d, $d, 90, 90); $p.CloseFigure(); return $p
+    }
+    $x0 = $t; $ty = [Math]::Max([int]($d / 2 + 7), [Math]::Min($h - [int]($d / 2) - 7, $ty))
     $p.AddArc($x0 + 0.75, 0.75, $d, $d, 180, 90); $p.AddArc($x0 + $bw - $d - 1.5, 0.75, $d, $d, 270, 90); $p.AddArc($x0 + $bw - $d - 1.5, $h - $d - 1.5, $d, $d, 0, 90); $p.AddArc($x0 + 0.75, $h - $d - 1.5, $d, $d, 90, 90)
-    if ($haleVenstre) { $p.AddLine($x0 + 0.75, $h - $d / 2, $x0 + 0.75, $ty + 7); $p.AddLine($x0 + 0.75, $ty + 7, 0.75, $ty); $p.AddLine(0.75, $ty, $x0 + 0.75, $ty - 7) }
-    else { $p.AddLine($x0 + 0.75, $h - $d / 2, $x0 + 0.75, $ty + 7); $p.AddLine($x0 + 0.75, $ty + 7, 0.75, $ty); $p.AddLine(0.75, $ty, $x0 + 0.75, $ty - 7) }
-    $p.CloseFigure()
+    $p.AddLine($x0 + 0.75, $h - $d / 2, $x0 + 0.75, $ty + 7); $p.AddLine($x0 + 0.75, $ty + 7, 0.75, $ty); $p.AddLine(0.75, $ty, $x0 + 0.75, $ty - 7); $p.CloseFigure()
     if (-not $haleVenstre) { $m = New-Object Drawing.Drawing2D.Matrix(-1, 0, 0, 1, $w - 1.5, 0); $p.Transform($m); $m.Dispose() }
     return $p
 }
@@ -1849,48 +1852,82 @@ function Boble-Sett([string]$tekst) {
     $t = $script:bHale; $maksT = S 270; $padV = S 10
     $m = [Windows.Forms.TextRenderer]::MeasureText($tekst, $fTekst, (New-Object Drawing.Size($maksT, 0)), [Windows.Forms.TextFormatFlags]::WordBreak -bor [Windows.Forms.TextFormatFlags]::NoPadding)
     $w = $m.Width + (S 18) + (S 26) + $t + 2; $h = [Math]::Max((S 40), $m.Height + 2 * $padV + 2)
-    if ($w -ne $script:bW -or $h -ne $script:bH) { $script:bW = $w; $script:bH = $h; $script:bPos = $null; $bobl.Size = New-Object Drawing.Size($w, $h) }
-    $bobl.Invalidate(); Boble-Plasser $true; if (-not $bobl.Visible) { $bobl.Show(); [Vin]::Topp($bobl) }
+    if ($w -ne $script:bW -or $h -ne $script:bH) { $script:bW = $w; $script:bH = $h; $script:bStil = ''; $bobl.Size = New-Object Drawing.Size($w, $h) }
+    $bobl.Invalidate(); Boble-Plasser $true 100; if (-not $bobl.Visible) { $bobl.Show(); [Vin]::Topp($bobl) }
 }
-function Skjul-Boble { $script:bTekst = ''; $script:bTil = $null; if ($bobl.Visible) { $bobl.Hide() } }
-# Plasserer boblen ved siden av bindersen (følgeren), eller ved siden av målet under veiledning. Kalles hver tikk; flytter bare når noe har endret seg.
-function Boble-Plasser([bool]$tving) {
-    if (-not $script:bTekst) { return }
-    $c = [Windows.Forms.Cursor]::Position; $wa = [Windows.Forms.Screen]::FromPoint($c).WorkingArea
-    if ($script:vei -and $script:mål -and $peker.Visible) { $ax = $script:mål[0]; $ay = $script:mål[1]; $aw = $script:mål[2] - $script:mål[0]; $ah = $script:mål[3] - $script:mål[1]; $wa = [Windows.Forms.Screen]::FromRectangle((New-Object Drawing.Rectangle($ax, $ay, [Math]::Max(1, $aw), [Math]::Max(1, $ah)))).WorkingArea }
-    elseif ($peker.Visible) { $ax = $script:px - 20; $ay = $script:py - 20; $aw = 40; $ah = 40 }
-    elseif ($null -ne $script:musX) { $ax = [int]$script:musX; $ay = [int]$script:musY; $aw = 40; $ah = 40 }
-    else { $ax = $c.X + 32; $ay = $c.Y + 32; $aw = 40; $ah = 40 }
-    $hv = ($ax + $aw + 6 + $script:bW -le $wa.Right)   # plass til høyre for ikonet/målet?
-    $x = $(if ($hv) { $ax + $aw + 2 } else { $ax - 2 - $script:bW })
-    $y = [Math]::Min([Math]::Max($wa.Top, $ay + [int]($ah / 2) - [int]($script:bH / 2)), $wa.Bottom - $script:bH)
-    $x = [Math]::Max($wa.Left, [Math]::Min($x, $wa.Right - $script:bW))
-    $hy = $ay + [int]($ah / 2) - $y
-    $nyPos = "$x,$y,$hv,$hy"
-    if (-not $tving -and $nyPos -eq $script:bPos) { return }
-    $form1 = ($script:bVenstre -ne $hv) -or ($hy -ne $script:bHaleY) -or $tving
-    $script:bPos = $nyPos; $script:bVenstre = $hv; $script:bHaleY = $hy
-    if ($form1) { $sti = Boble-Sti $script:bW $script:bH $hv $hy; $r = $bobl.Region; $bobl.Region = New-Object Drawing.Region($sti); if ($r) { $r.Dispose() }; $sti.Dispose(); $bobl.Invalidate() }
-    $bobl.Location = New-Object Drawing.Point($x, $y)
+function Skjul-Boble { $script:bTekst = ''; $script:bTil = $null; $script:bManuell = $false; $script:bX = $null; $script:bFarNokkel = ''; $script:bDrar = $false; if ($bobl.Visible) { $bobl.Hide() } }
+function Boble-Avstand([Drawing.Rectangle]$a, [Drawing.Rectangle]$b) { $dx = [Math]::Max([Math]::Max($b.Left - $a.Right, $a.Left - $b.Right), 0); $dy = [Math]::Max([Math]::Max($b.Top - $a.Bottom, $a.Top - $b.Bottom), 0); [Math]::Sqrt($dx * $dx + $dy * $dy) }
+# Plasserer boblen. Veiledning: et rolig sted langt fra målet (minst ca. 220 px, helst nær musa), uten hale. Ellers: ved bindersen, med myk glidning.
+function Boble-Plasser([bool]$tving, [double]$dt) {
+    if (-not $script:bTekst -or $script:bDrar) { return }
+    $c = [Windows.Forms.Cursor]::Position
+    $far = $script:vei -and $script:mål
+    if ($far) {
+        $mr = New-Object Drawing.Rectangle($script:mål[0], $script:mål[1], [Math]::Max(1, $script:mål[2] - $script:mål[0]), [Math]::Max(1, $script:mål[3] - $script:mål[1]))
+        $nk = "$($script:mål -join ',')|$($script:bW)|$($script:bH)"
+        if ($nk -ne $script:bFarNokkel -and -not $script:bManuell) {
+            $script:bFarNokkel = $nk; $wa = [Windows.Forms.Screen]::FromRectangle($mr).WorkingArea; $W = $script:bW; $H = $script:bH; $mg = S 30
+            $kand = @(@(($wa.Left + [int](($wa.Width - $W) / 2)), ($wa.Top + $mg)), @(($wa.Left + [int](($wa.Width - $W) / 2)), ($wa.Bottom - $H - $mg)), @(($wa.Left + $mg), ($wa.Top + [int](($wa.Height - $H) / 2))), @(($wa.Right - $W - $mg), ($wa.Top + [int](($wa.Height - $H) / 2))), @(($wa.Left + $mg), ($wa.Top + $mg)), @(($wa.Right - $W - $mg), ($wa.Top + $mg)), @(($wa.Left + $mg), ($wa.Bottom - $H - $mg)), @(($wa.Right - $W - $mg), ($wa.Bottom - $H - $mg)))
+            $best = $null; $bestS = [double]::MaxValue; $reserve = $null; $resD = -1
+            foreach ($k in $kand) {
+                $kr = New-Object Drawing.Rectangle($k[0], $k[1], $W, $H); $av = Boble-Avstand $kr $mr
+                $nær = [Math]::Sqrt([Math]::Pow($kr.Left + $W / 2 - $c.X, 2) + [Math]::Pow($kr.Top + $H / 2 - $c.Y, 2))
+                if ($av -ge (S 220) -and $nær -lt $bestS) { $bestS = $nær; $best = $k }
+                if ($av -gt $resD) { $resD = $av; $reserve = $k }
+            }
+            if (-not $best) { $best = $reserve }
+            $script:bFarX = $best[0]; $script:bFarY = $best[1]; $script:bX = $null
+        }
+        $tx = $script:bFarX; $ty = $script:bFarY; $hv = $script:bVenstre; $utenH = $true
+    } else {
+        $wa = [Windows.Forms.Screen]::FromPoint($c).WorkingArea
+        if ($peker.Visible) { $ax = $script:px - 20; $ay = $script:py - 20 } elseif ($null -ne $script:musX) { $ax = [int]$script:musX; $ay = [int]$script:musY } else { $ax = $c.X + 32; $ay = $c.Y + 32 }
+        $hv = ($ax + 46 + $script:bW -le $wa.Right)   # plass til høyre for ikonet?
+        $tx = $(if ($hv) { $ax + 42 } else { $ax - 2 - $script:bW }); $ty = $ay + 20 - [int]($script:bH / 2)
+        $ty = [Math]::Min([Math]::Max($wa.Top, $ty), $wa.Bottom - $script:bH); $tx = [Math]::Max($wa.Left, [Math]::Min($tx, $wa.Right - $script:bW)); $utenH = $false
+    }
+    $stil = "$hv|$utenH|$($script:bW)|$($script:bH)"
+    if ($stil -ne $script:bStil) {   # formen bygges bare på nytt når side, hale eller størrelse endres (ikke ved hver flytting)
+        $script:bStil = $stil; $script:bVenstre = $hv; $script:bUtenHale = $utenH; $script:bHaleY = [int]($script:bH / 2)
+        $sti = Boble-Sti $script:bW $script:bH $hv $script:bHaleY $utenH; $r = $bobl.Region; $bobl.Region = New-Object Drawing.Region($sti); if ($r) { $r.Dispose() }; $sti.Dispose(); $bobl.Invalidate()
+    }
+    if ($script:bManuell) { return }   # du har dratt den: den blir der du la den
+    if ($null -eq $script:bX -or $tving -or $far -or $script:rolig) { $script:bX = [double]$tx; $script:bY = [double]$ty }
+    else { $k = 1 - [Math]::Exp(-$dt / 55.0); $script:bX += ($tx - $script:bX) * $k; $script:bY += ($ty - $script:bY) * $k }   # myk glidning mot målposisjonen
+    $nx = [int][Math]::Round($script:bX); $ny = [int][Math]::Round($script:bY)
+    if ($nx -ne $bobl.Left -or $ny -ne $bobl.Top) { $bobl.Location = New-Object Drawing.Point($nx, $ny) }
 }
 $bobl.Add_Paint({ param($snd, $ev)
     if (-not $script:bTekst) { return }
     $g = $ev.Graphics; $g.SmoothingMode = 'AntiAlias'
-    $sti = Boble-Sti $script:bW $script:bH $script:bVenstre $script:bHaleY
+    $sti = Boble-Sti $script:bW $script:bH $script:bVenstre $script:bHaleY $script:bUtenHale
     $bk = New-Object Drawing.SolidBrush($cInnFlate); $g.FillPath($bk, $sti); $bk.Dispose()
     $pn = New-Object Drawing.Pen((Farge '#8f87c2'), 1.5); $pn.LineJoin = 'Round'; $g.DrawPath($pn, $sti); $pn.Dispose(); $sti.Dispose()
     $t = $script:bHale; $x0 = $(if ($script:bVenstre) { $t } else { 0 })
     [Windows.Forms.TextRenderer]::DrawText($g, $script:bTekst, $fTekst, (New-Object Drawing.Rectangle(($x0 + (S 14)), (S 10), ($script:bW - $t - (S 14) - (S 26)), ($script:bH - (S 14)))), $cTekst, [Windows.Forms.TextFormatFlags]::WordBreak -bor [Windows.Forms.TextFormatFlags]::NoPadding)
-    $kx = $x0 + $script:bW - $t - (S 18); $ky = (S 11); $q = New-Object Drawing.Pen($cDempet, 1.5); $q.StartCap = 'Round'; $q.EndCap = 'Round'   # liten × (klikk skjuler)
+    $kx = $x0 + $script:bW - $t - (S 18); $ky = (S 11); $q = New-Object Drawing.Pen($cDempet, 1.5); $q.StartCap = 'Round'; $q.EndCap = 'Round'   # liten ×
     $g.DrawLine($q, $kx, $ky, $kx + (S 7), $ky + (S 7)); $g.DrawLine($q, $kx + (S 7), $ky, $kx, $ky + (S 7)); $q.Dispose()
 })
-$bobl.Add_MouseDown({ Skjul-Boble })
+# Dra for å flytte; × skjuler. Under veiledning forsvinner boblen når du klikker et annet sted.
+$bobl.Add_MouseDown({ param($snd, $ev)
+    if ($ev.Button -ne 'Left') { return }
+    $x0 = $(if ($script:bVenstre) { $script:bHale } else { 0 })
+    if ($ev.X -ge ($x0 + $script:bW - $script:bHale - (S 28)) -and $ev.Y -le (S 28)) { Skjul-Boble; return }
+    $script:bDrar = $true; $script:bDragP = [Windows.Forms.Cursor]::Position; $script:bDragL = $bobl.Location
+})
+$bobl.Add_MouseMove({ param($snd, $ev)
+    if (-not $script:bDrar) { return }
+    $c = [Windows.Forms.Cursor]::Position; $dx = $c.X - $script:bDragP.X; $dy = $c.Y - $script:bDragP.Y
+    if ([Math]::Abs($dx) + [Math]::Abs($dy) -gt 3) { $script:bManuell = $true }
+    if ($script:bManuell) { $bobl.Location = New-Object Drawing.Point(($script:bDragL.X + $dx), ($script:bDragL.Y + $dy)); $script:bX = [double]$bobl.Left; $script:bY = [double]$bobl.Top }
+})
+$bobl.Add_MouseUp({ $script:bDrar = $false })
 [void][Vin]::Ekskluder($bobl)
 [void][Vin]::Ekskluder($musInn)
 
 # Klokke 2 (700 ms): oppfølgingen under veiledning.
 $veiKlokke = New-Object Windows.Forms.Timer
-$veiKlokke.Interval = 450
+$veiKlokke.Interval = 250
 $veiKlokke.Add_Tick({ try { Følg-Med } catch { } })
 
 # Klokke 3 (15 ms, tidsbasert): animasjoner: øya vokser og krymper, tones inn og ut, binders hopper, ring, skrivemaskin, peker.
