@@ -279,6 +279,7 @@ public class Ramme : Form {
         get { CreateParams p = base.CreateParams; p.ExStyle |= 0x80000 | 0x20 | 0x08000000 | 0x80; return p; }
     }
     protected override void OnPaint(PaintEventArgs e) {
+        using (Pen d = new Pen(Color.FromArgb(11, 10, 18), 5)) e.Graphics.DrawRectangle(d, 2, 2, Width - 5, Height - 5);
         using (Pen p = new Pen(Color.FromArgb(168, 162, 210), 2)) e.Graphics.DrawRectangle(p, 2, 2, Width - 5, Height - 5);
     }
 }
@@ -984,12 +985,19 @@ $knappStopp = Ny-Knapp 'Stopp' '#3a1f22' '#4d282c' '#f0c4c0' $false
 $knappLukk = Ny-Knapp ([string][char]0x2715) '#0b0a12' '#222035' '#9b98b0' $false
 $knappLukk.AccessibleName = 'Lukk til tray'; $knappStopp.AccessibleName = 'Stopp'
 $script:valg = @()
-$valgKnapper = @(1..4 | ForEach-Object { $vk = Ny-Knapp 'valg' '#26233a' '#322f4a' '#ecebf3' $false; $vk.TextAlign = 'MiddleLeft'; $vk.UseMnemonic = $false; $vk.Padding = New-Object Windows.Forms.Padding(12, 0, 0, 0); $vk.Add_Click({ param($snd, $ev) if ($script:jobb) { return }; $inn.Text = "$($script:sporring): $($snd.Text)"; Send-Spørsmål $(if ($script:kallModus -eq 'start') { 'start' } else { 'spor' }) }); $vk })
+$tt = New-Object Windows.Forms.ToolTip
+$valgKnapper = @(1..4 | ForEach-Object { $vk = Ny-Knapp 'valg' '#26233a' '#322f4a' '#ecebf3' $false; $vk.TextAlign = 'MiddleLeft'; $vk.UseMnemonic = $false; $vk.AutoEllipsis = $true; $vk.Padding = New-Object Windows.Forms.Padding(12, 0, 0, 0); $vk.Add_Click({ param($snd, $ev) if ($script:jobb) { return }; $inn.Text = "$($script:sporring): $($snd.Text)"; Send-Spørsmål $(if ($script:kallModus -eq 'start') { 'start' } else { 'spor' }) }); $vk })
+foreach ($fk in @($knappSkjerm, $knappPause, $knappStopp, $knapp, $knappLukk) + $valgKnapper) {   # synlig fokusring (aksentfarge)
+    $fk.Add_GotFocus({ param($snd, $ev) $snd.FlatAppearance.BorderColor = $cAksent; $snd.FlatAppearance.BorderSize = 2 })
+    $fk.Add_LostFocus({ param($snd, $ev) $snd.FlatAppearance.BorderSize = 0 })
+}
+$bokInn.Add_Paint({ param($snd, $ev) if ($inn.Focused) { $pn = New-Object Drawing.Pen($cAksent, 2); $ev.Graphics.DrawRectangle($pn, 1, 1, $snd.Width - 3, $snd.Height - 3); $pn.Dispose() } })
+$inn.Add_GotFocus({ $bokInn.Invalidate() }); $inn.Add_LostFocus({ $bokInn.Invalidate() })
 $panel = @($lblSer, $bokSvar, $bokInn, $lblTips, $knappSkjerm, $knappPause, $knappStopp, $knapp, $knappLukk) + $valgKnapper
 $form.Controls.AddRange($panel)
 $svar.AccessibleName = 'Svar fra Bindy'; $inn.AccessibleName = 'Spørsmål til Bindy'; $knappSkjerm.AccessibleName = 'Skjerm: bytt mellom vindu, alle og av'; $knappPause.AccessibleName = 'Pause'; $knapp.AccessibleName = 'Veiled meg'
-for ($vi = 0; $vi -lt $valgKnapper.Count; $vi++) { $valgKnapper[$vi].TabIndex = $vi; $valgKnapper[$vi].AccessibleName = "Valg $($vi + 1)" }   # valgene først i tab-rekkefølgen
-$inn.TabIndex = 4
+for ($vi = 0; $vi -lt $valgKnapper.Count; $vi++) { $valgKnapper[$vi].TabIndex = $vi }   # valgene først i tab-rekkefølgen
+$bokInn.TabIndex = 4; $bokSvar.TabStop = $false; $knappSkjerm.TabIndex = 5; $knappPause.TabIndex = 6; $knappStopp.TabIndex = 7; $knapp.TabIndex = 8; $knappLukk.TabIndex = 9
 foreach ($c in $panel) { $c.Visible = $false }
 
 # Plasserer innholdet i det utvidede panelet (8-punkts rutenett) og beregner panelhøyden ($script:panelH).
@@ -1005,7 +1013,7 @@ function Legg-Ut([bool]$harSvar) {
         $bokSvar.SetBounds((S $ox), (S $y), (S $w), (S $svarH)); $svar.SetBounds((S 14), (S 10), (S ($w - 28)), (S ($svarH - 20)))
         Rund-Region $bokSvar (S 12); $y += $svarH + 8
     }
-    for ($vi = 0; $vi -lt $valgKnapper.Count; $vi++) { if ($vi -lt $script:valg.Count) { $valgKnapper[$vi].Text = $script:valg[$vi]; $valgKnapper[$vi].SetBounds((S $ox), (S $y), (S $w), (S 36)); Rund-Region $valgKnapper[$vi] (S 10); $y += 44 } }
+    for ($vi = 0; $vi -lt $valgKnapper.Count; $vi++) { if ($vi -lt $script:valg.Count) { $valgKnapper[$vi].Text = $script:valg[$vi]; $valgKnapper[$vi].AccessibleName = $script:valg[$vi]; $tt.SetToolTip($valgKnapper[$vi], $script:valg[$vi]); $valgKnapper[$vi].SetBounds((S $ox), (S $y), (S $w), (S 36)); Rund-Region $valgKnapper[$vi] (S 10); $y += 44 } }
     $bokInn.SetBounds((S $ox), (S $y), (S $w), (S 44)); $inn.Width = S ($w - 28); $inn.Left = S 14
     $inn.Top = [int](($bokInn.Height - $inn.Height) / 2); Rund-Region $bokInn (S 12); $y += 44 + 8
     $bw = [int](($w - 24) / 4)
@@ -1014,6 +1022,8 @@ function Legg-Ut([bool]$harSvar) {
     $y += 32 + 8
     $lblTips.SetBounds((S $ox), (S $y), (S $w), (S 18)); $y += 18
     $script:panelH = $y + 14 - $oy
+    $maksH = [Windows.Forms.Screen]::FromControl($form).WorkingArea.Height
+    $form.Height = [Math]::Min($maksH, [Math]::Max((S 420), (S ($script:panelH + 24))))   # panelet klippes ikke når svar og valg er lange
     if ($script:modus -eq 'full') { $script:iHm = $script:panelH }
     Vis-Innhold
 }
@@ -1182,7 +1192,7 @@ function Klipp-Hover {
 # Skjermmodus: 'vindu' (aktivt vindu), 'alle' (alle skjermer) eller 'av' (bare tekst).
 function Sett-Skjerm([string]$modus) {
     $script:skjermModus = $modus
-    $knappSkjerm.Text = @{ vindu = 'Skjerm: vindu'; alle = 'Skjerm: alle'; av = 'Skjerm: av' }[$modus]
+    $knappSkjerm.Text = @{ vindu = 'Skjerm: vindu'; alle = 'Skjerm: alle'; av = 'Skjerm: av' }[$modus]; $knappSkjerm.AccessibleName = $knappSkjerm.Text
     if ($modus -eq 'av') {
         $script:jpeg = $null; $script:geom = $null; $script:tittel = ''; $script:alle = $false; $lblSer.Text = 'Bare spørsmål, uten skjerm'
         return
@@ -1205,7 +1215,7 @@ $knappPause.Add_Click({ Sett-Pause (-not $script:pause) })
 # ---------------------------------------------------------------- lenker og svar
 
 $UrlRegex = '(?i)\b(?:https?://[^\s<>")\]*`]+|(?:www\.)?[a-z0-9][a-z0-9-]*(?:\.[a-z0-9-]+)*\.(?:com|org|net|no|io|dev|app|co|uk|eu|se|de)(?:/[^\s<>")\]*`]*)?)'
-function Sett-Tips([string]$t) { $lblTips.Text = $t; $script:tipsTil = [DateTime]::Now.AddSeconds(3.5) }
+function Sett-Tips([string]$t) { $lblTips.Text = $t; $script:tipsTil = [DateTime]::Now.AddSeconds(6) }
 # Ser etter nye kopier (hopper over passordbehandlere og sperrede vinduer, og kopier markert som private).
 function Les-Utklipp {
     Rydd-Klipp
@@ -1254,6 +1264,7 @@ function Kopier-Lenke([string]$u) {
 }
 # Viser svaret ferdig (eller med «skrivemaskin»-effekt hvis $skriv) og kopierer første lenke automatisk.
 function Sett-Svar([string]$tekst, [bool]$skriv) {
+    if ($script:rolig) { $skriv = $false }
     $tekst = ($tekst -replace '\*\*|`', '') -replace "`r?`n", "`r`n"   # fjerner markdown-rester
     $script:svarFull = $tekst; $script:visN = $(if ($skriv) { 0 } else { $tekst.Length })
     $svar.Text = $(if ($skriv) { '' } else { $tekst })
@@ -1262,7 +1273,8 @@ function Sett-Svar([string]$tekst, [bool]$skriv) {
         Sett-Tips 'Klikk en lenke i svaret for å kopiere den.'
     }
 }
-function Puls { $script:ring = 1.0 }
+$script:rolig = -not [Windows.Forms.SystemInformation]::UIEffectsEnabled   # Windows «Vis animasjoner» av: ingen hopp, ringer eller skrivemaskin
+function Puls { if (-not $script:rolig) { $script:ring = 1.0 } }
 
 function Oppdater-Ikon {
     if ($script:pause) { $tray.Icon = $ikonPause; $tray.Text = 'Bindy: PAUSET' }
@@ -1270,7 +1282,7 @@ function Oppdater-Ikon {
     elseif ($script:vei) { $tray.Icon = $ikonGrønn; $tray.Text = 'Bindy: VEILEDNING PÅ' }
     else { $tray.Icon = $ikonNormal; $tray.Text = 'Bindy (Ctrl+Alt+H)' }
     $stoppKnapp.Enabled = [bool]($script:vei -or $script:jobb)
-    $knappPause.Text = $(if ($script:pause) { 'Fortsett' } else { 'Pause' })
+    $knappPause.Text = $(if ($script:pause) { 'Fortsett' } else { 'Pause' }); $knappPause.AccessibleName = $knappPause.Text
     $knappPause.BackColor = (Farge $(if ($script:pause) { '#4a4026' } else { '#17151f' }))
     $knappPause.ForeColor = (Farge $(if ($script:pause) { '#efe0b4' } else { '#d9d6ee' }))
     $form.Invalidate()
@@ -1451,7 +1463,7 @@ function Behandle-Svar($j) {
         if (-not $d.tekst -and $d.behov) { $d.tekst = 'Jeg trenger å se mer enn dette vinduet, men fikk ikke tatt bilde av alle skjermene.' }
         [void]$script:logg.Add(@{ q = $script:sporring; a = $d.tekst; t = Get-Date })
         $svar.ForeColor = $cTekst; Sett-Svar $d.tekst (-not $script:strømmer)
-        $script:valg = @($d.valg); if ($script:valg.Count) { Sett-Modus 'full'; Legg-Ut $true; $script:iHm = $script:panelH; Vis-Innhold }
+        $script:valg = @($d.valg); if ($script:valg.Count) { $script:fokusNår = $true; Sett-Modus 'full'; Legg-Ut $true; $script:iHm = $script:panelH; Vis-Innhold }
         if ($script:kallModus -eq 'start' -and $d.status -ne 'SPØRSMÅL') { Start-Veiledning }   # SPØRSMÅL: Claude ber om kontekst først, veiledningen starter når brukeren svarer og trykker «Veiled meg» igjen
         if ($script:vei) {
             switch ($d.status) {
@@ -1506,13 +1518,13 @@ $klokke.Add_Tick({
                 }
                 $lblSer.Text = 'Skriver'
             }
-        } elseif ($script:hopp -eq 0) { $script:bob = $(if ($script:tikk % 2) { -3 } else { 0 }) }
+        } elseif ($script:hopp -eq 0 -and -not $script:rolig) { $script:bob = $(if ($script:tikk % 2) { -3 } else { 0 }) }
         if (-not $script:strømmer) { $lblSer.Text = $script:tenkTekst + (' ·' * ([int]($script:tikk / 3) % 3 + 1)) }
         $form.Invalidate()
     }
     if ($j -and $j.p.HasExited -and $j.ferdig) { Behandle-Svar $j }
     if ($script:kollapsTid -and [DateTime]::Now -gt $script:kollapsTid) {
-        if ($inn.Focused -or $inn.Text) { $script:kollapsTid = [DateTime]::Now.AddSeconds(5) }   # du skriver: la den stå
+        if ($inn.Focused -or $inn.Text -or $script:valg.Count -or $form.ContainsFocus) { $script:kollapsTid = [DateTime]::Now.AddSeconds(5) }   # du skriver: la den stå
         else { $script:kollapsTid = $null; Sett-Modus $(if ($script:vei) { 'pille' } else { 'skjult' }) }
     }
     if ($script:rammeTid -and [DateTime]::Now -gt $script:rammeTid) { Skjul-Ramme }
@@ -1541,6 +1553,7 @@ $animKlokke.Add_Tick({
         $script:iB += ($script:iBm - $script:iB) * 0.28; $script:iH += ($script:iHm - $script:iH) * 0.28; $tegn = $true
         Vis-Innhold
     } elseif ($script:iB -ne $script:iBm -or $script:iH -ne $script:iHm) { $script:iB = $script:iBm; $script:iH = $script:iHm; $tegn = $true; Vis-Innhold }
+    if ($script:rolig) { $script:hopp = 0 }
     if ($script:hopp -gt 0) { $script:hopp--; $script:bob = -[int](8 * [Math]::Sin([Math]::PI * (1 - $script:hopp / 9.0))); $tegn = $true }
     if ($script:ring -gt 0) { $script:ring = [Math]::Max(0, $script:ring - 0.045); $tegn = $true }
     if (-not $script:strømmer -and $script:svarFull -and $script:visN -lt $script:svarFull.Length) {   # skrivemaskin (ikke når svaret strømmet inn)
@@ -1572,9 +1585,10 @@ $animKlokke.Add_Tick({
 $animKlokke.Start()
 
 $hk = New-Object HurtigtastVindu
-if (-not $hk.Registrer(1, 0x4003, 0x48)) { $tray.ShowBalloonTip(5000, 'Bindy', 'Ctrl+Alt+H er opptatt.', 'Warning') }   # H: spør med skjerm
-if (-not $hk.Registrer(2, 0x4003, 0x4A)) { $tray.ShowBalloonTip(5000, 'Bindy', 'Ctrl+Alt+J er opptatt.', 'Warning') }   # J: bare spørsmål
-if (-not $hk.Registrer(3, 0x4003, 0x50)) { $tray.ShowBalloonTip(5000, 'Bindy', 'Ctrl+Alt+P er opptatt.', 'Warning') }   # P: pause
+$tray.ShowBalloonTip(5000, 'Bindy', $(if ($script:ClaudeSti) { 'Bindy kjører. Trykk Ctrl+Alt+H for å spørre, eller dobbeltklikk binders-ikonet.' } else { 'Fant ikke claude. Installer Claude Code og logg inn (se docs/INSTALLASJON.md), start så Bindy på nytt.' }), $(if ($script:ClaudeSti) { 'Info' } else { 'Warning' }))
+if (-not $hk.Registrer(1, 0x4003, 0x48)) { $tray.ShowBalloonTip(5000, 'Bindy', 'Ctrl+Alt+H er opptatt. Kjører Bindy allerede, eller har en annen app tatt den?', 'Warning') }   # H: spør med skjerm
+if (-not $hk.Registrer(2, 0x4003, 0x4A)) { $tray.ShowBalloonTip(5000, 'Bindy', 'Ctrl+Alt+J er opptatt. Kjører Bindy allerede, eller har en annen app tatt den?', 'Warning') }   # J: bare spørsmål
+if (-not $hk.Registrer(3, 0x4003, 0x50)) { $tray.ShowBalloonTip(5000, 'Bindy', 'Ctrl+Alt+P er opptatt. Kjører Bindy allerede, eller har en annen app tatt den?', 'Warning') }   # P: pause
 $hk.add_Trykket({ param($id) try {
     if ($id -eq 3) { Sett-Pause (-not $script:pause); return }
     if ($script:jobb) { return }
