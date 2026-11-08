@@ -20,7 +20,7 @@ jobs:
         shell: powershell
         run: |
           Install-Module PSScriptAnalyzer -Force -Scope CurrentUser
-          $r = Invoke-ScriptAnalyzer -Path src, scripts -Recurse -Severity Error
+          $r = foreach ($mappe in 'src', 'scripts') { Invoke-ScriptAnalyzer -Path $mappe -Recurse -Severity Error }
           $r | Format-Table -AutoSize
           if ($r) { exit 1 }
       - name: Starteren bygger
