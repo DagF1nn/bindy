@@ -94,6 +94,7 @@ Du ser en liten binders i tray (nederst til høyre, kanskje under pila for skjul
 | **Ctrl+Alt+H** | Spør med skjermbilde av vinduet du står i |
 | **Ctrl+Alt+J** | Spør uten skjermbilde |
 | **Ctrl+Alt+P** | Pause (stopper all skjermfangst) |
+| **Ctrl+Alt+N** | Neste steg i veiledningen |
 | **Enter** | Send spørsmålet |
 | **Ctrl+Enter** eller **Veiled meg** | Veiledning steg for steg: Bindy peker på det du skal trykke, og sjekker underveis |
 | **Esc** | Lukk panelet |
