@@ -43,5 +43,5 @@ try {
 if (-not $IkkeAutostart) {
     Set-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'Bindy' -Value "`"$dest\BindyStart.exe`""
 }
-try { $lnk = (New-Object -ComObject WScript.Shell).CreateShortcut("$env:ProgramData\Microsoft\Windows\Start Menu\Programs\Bindy.lnk"); $lnk.TargetPath = "$dest\BindyStart.exe"; $lnk.WorkingDirectory = $dest; $lnk.Save() } catch { Write-Host "Snarvei i Startmenyen feilet: $_" }   # slik finner du Bindy i Start
+try { $lnk = (New-Object -ComObject WScript.Shell).CreateShortcut("$env:ProgramData\Microsoft\Windows\Start Menu\Programs\Bindy.lnk"); $lnk.TargetPath = "$dest\BindyStart.exe"; $lnk.WorkingDirectory = $dest; $lnk.IconLocation = "$dest\BindyStart.exe,0"; $lnk.Save() } catch { Write-Host "Snarvei i Startmenyen feilet: $_" }   # slik finner du Bindy i Start
 Write-Host "Ferdig. Start Bindy: & '$dest\BindyStart.exe'"
