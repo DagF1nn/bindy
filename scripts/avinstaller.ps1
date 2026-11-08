@@ -6,6 +6,7 @@ if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
 $dest = Join-Path $env:ProgramFiles 'Bindy'
 Get-Process BindyStart -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq (Join-Path $dest 'BindyStart.exe') } | Stop-Process -Force
 Remove-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'Bindy' -ErrorAction SilentlyContinue
+Remove-Item "$env:ProgramData\Microsoft\Windows\Start Menu\Programs\Bindy.lnk" -ErrorAction SilentlyContinue
 foreach ($navn in 'Root', 'TrustedPublisher') {
     $lager = New-Object Security.Cryptography.X509Certificates.X509Store($navn, 'LocalMachine'); $lager.Open('ReadWrite')
     foreach ($c in @($lager.Certificates | Where-Object { $_.Subject -eq 'CN=Bindy lokal signering' })) { $lager.Remove($c) }

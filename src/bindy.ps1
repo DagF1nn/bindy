@@ -324,6 +324,22 @@ public class Mentor : Form {
     }
     protected override bool ShowWithoutActivation { get { return true; } }
 }
+// Tray-menyen i samme mørke stil som resten av Bindy.
+public class MørkFarger : ProfessionalColorTable {
+    static Color C(int r, int g, int b) { return Color.FromArgb(r, g, b); }
+    public override Color ToolStripDropDownBackground { get { return C(20, 18, 30); } }
+    public override Color MenuBorder { get { return C(38, 35, 58); } }
+    public override Color MenuItemBorder { get { return C(143, 135, 194); } }
+    public override Color MenuItemSelected { get { return C(38, 35, 58); } }
+    public override Color ImageMarginGradientBegin { get { return C(20, 18, 30); } }
+    public override Color ImageMarginGradientMiddle { get { return C(20, 18, 30); } }
+    public override Color ImageMarginGradientEnd { get { return C(20, 18, 30); } }
+    public override Color SeparatorDark { get { return C(38, 35, 58); } }
+    public override Color SeparatorLight { get { return C(38, 35, 58); } }
+    public override Color CheckBackground { get { return C(38, 35, 58); } }
+    public override Color CheckSelectedBackground { get { return C(38, 35, 58); } }
+    public override Color CheckPressedBackground { get { return C(38, 35, 58); } }
+}
 // Lite skrivefelt-vindu ved bindersen: tar fokus (i motsetning til de andre), vises ikke i Alt-Tab.
 public class InnVindu : Form {
     public InnVindu() { FormBorderStyle = FormBorderStyle.None; ShowInTaskbar = false; TopMost = true; StartPosition = FormStartPosition.Manual; }
@@ -1497,6 +1513,7 @@ $musKnapp.Add_CheckedChanged({ $script:musPå = $musKnapp.Checked; try { if ($sc
 [void]$meny.Items.Add($musKnapp)
 [void]$meny.Items.Add($apneKnapp); [void]$meny.Items.Add($tomKnapp); [void]$meny.Items.Add($delKnapp); [void]$meny.Items.Add($pauseKnapp); [void]$meny.Items.Add($stoppKnapp); [void]$meny.Items.Add($glemKnapp)
 [void]$meny.Items.Add('Avslutt Bindy', $null, { $tray.Visible = $false; Stopp-Veiledning $null; $form.Hide(); [Windows.Forms.Application]::Exit() })
+$meny.Renderer = New-Object Windows.Forms.ToolStripProfessionalRenderer((New-Object MørkFarger)); $meny.Renderer.RoundedEdges = $false; $meny.BackColor = $cFlate; $meny.ForeColor = $cTekst; $meny.Font = New-Object Drawing.Font($Familie, 9.5); $meny.ShowImageMargin = $false
 $tray.ContextMenuStrip = $meny
 $tray.Add_DoubleClick({ $script:fokusNår = $true; Sett-Modus 'full'; Puls })
 $tray.Add_MouseClick({ param($s, $e) if ($e.Button -eq 'Left') { Sett-Pause (-not $script:pause) } })   # venstreklikk på ikonet = pause/fortsett
