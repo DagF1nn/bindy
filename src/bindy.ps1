@@ -338,6 +338,8 @@ public class Overlegg : Form {
     [DllImport("gdi32.dll")] static extern bool DeleteDC(IntPtr dc);
     [DllImport("gdi32.dll")] static extern IntPtr SelectObject(IntPtr dc, IntPtr o);
     [DllImport("gdi32.dll")] static extern bool DeleteObject(IntPtr o);
+    [DllImport("user32.dll")] static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint f);
+    public void Flytt(int x, int y) { if (IsHandleCreated) SetWindowPos(Handle, IntPtr.Zero, x, y, 0, 0, 0x15); }   // NOSIZE | NOZORDER | NOACTIVATE
     public Overlegg() { FormBorderStyle = FormBorderStyle.None; ShowInTaskbar = false; TopMost = true; StartPosition = FormStartPosition.Manual; }
     protected override bool ShowWithoutActivation { get { return true; } }
     protected override CreateParams CreateParams {
@@ -715,8 +717,21 @@ function Lag-Ikon($farge) {   # tray-ikon: binders i valgt farge
 
 # ---------------------------------------------------------------- selvsjekk og prøve
 
+# Musefølger: målposisjon for ikonet (b x h) i fast avstand ned til høyre for pekeren; flippes til venstre/opp ved skjermkanten.
+function Mus-Mål([int]$cx, [int]$cy, [int]$b, [int]$h, $wa) {
+    $d = 32; $x = $cx + $d; $y = $cy + $d
+    if ($x + $b -gt $wa.Right) { $x = $cx - $d - $b }
+    if ($y + $h -gt $wa.Bottom) { $y = $cy - $d - $h }
+    return @($x, $y)
+}
+
 if ($Sjekk) {
     $fe = 0
+    $wa = New-Object Drawing.Rectangle(0, 0, 1920, 1080)
+    foreach ($t in @(@(100, 100, 132, 132), @(1900, 100, 1828, 132), @(100, 1070, 132, 998), @(1900, 1070, 1828, 998))) {
+        $m = Mus-Mål $t[0] $t[1] 40 40 $wa
+        if ($m[0] -ne $t[2] -or $m[1] -ne $t[3]) { Write-Host "FEIL: Mus-Mål ($($t[0]),$($t[1])) ga $($m -join ',')"; $fe++ }
+    }
     foreach ($t in 'Min bank - Edge', 'Bitwarden', 'Notepad') {   # sperrelista skal treffe de to første
         if (($t -match $Sperret) -ne ($t -ne 'Notepad')) { Write-Host "FEIL: sperrelista for '$t'"; $fe++ }
     }
@@ -821,6 +836,7 @@ $script:px = 0.0; $script:py = 0.0; $script:pTx = 0.0; $script:pTy = 0.0
 $ramme = New-Object Ramme; $ramme.Opacity = 0.5
 $overlegg = New-Object Overlegg; $script:ovShapes = $null; $script:ovBox = $null; $script:ovStart = $null; $script:ovFrame = 0; $script:ovNy = $false; $script:ovVar = $false
 $peker = New-Object Peker; $peker.Opacity = 0.88
+$mus = New-Object Overlegg; $script:musX = $null; $script:musY = $null; $script:musVist = $false
 function Skjul-Ramme { $ramme.Hide(); $overlegg.Hide(); $script:ovShapes = $null; $script:rammeTid = $null; if (-not $script:vei) { $peker.Hide() } }
 
 # ---- tegning: tre streker (glød, mørk kant, lys linje) så det syns på både lyse og mørke bakgrunner
@@ -1450,7 +1466,7 @@ $delKnapp.Add_CheckedChanged({ $script:delKlipp = $delKnapp.Checked; try { if ($
 $tray.ContextMenuStrip = $meny
 $tray.Add_DoubleClick({ $script:fokusNår = $true; Sett-Modus 'full'; Puls })
 $tray.Add_MouseClick({ param($s, $e) if ($e.Button -eq 'Left') { Sett-Pause (-not $script:pause) } })   # venstreklikk på ikonet = pause/fortsett
-foreach ($f in @($form, $ramme, $peker, $overlegg, $klippForm)) { [void][Vin]::Ekskluder($f) }   # Bindys vinduer kommer ikke med i skjermbilder, så ingenting skjules (ingen flimring)
+foreach ($f in @($form, $ramme, $peker, $overlegg, $klippForm, $mus)) { [void][Vin]::Ekskluder($f) }   # Bindys vinduer kommer ikke med i skjermbilder, så ingenting skjules (ingen flimring)
 $script:ekskl = $true
 $script:overlayKlar = $true
 
@@ -1534,6 +1550,30 @@ $klokke.Add_Tick({
 })
 $klokke.Start()
 
+# Klokke 4 (16 ms): musefølgeren, en liten binders som glir etter musa i fast avstand. Flytter bare vinduet når den ikke er framme.
+$musBmp = New-Object Drawing.Bitmap(40, 40, [Drawing.Imaging.PixelFormat]::Format32bppPArgb)
+$g = [Drawing.Graphics]::FromImage($musBmp); $g.SmoothingMode = 'AntiAlias'
+[Binders]::Tegn($g, 12, 4, 30, [Drawing.Color]::FromArgb(11, 10, 18), 5); [Binders]::Tegn($g, 12, 4, 30, [Drawing.Color]::FromArgb(196, 192, 222), 2.5); $g.Dispose()
+$musKlokke = New-Object Windows.Forms.Timer
+$musKlokke.Interval = 16
+$musKlokke.Add_Tick({
+    if ($script:pause) { if ($script:musVist) { $mus.Hide(); $script:musVist = $false; $script:musX = $null; $script:musFramme = $false }; return }
+    $c = [Windows.Forms.Cursor]::Position
+    if ($script:musFramme -and $c.X -eq $script:musCX -and $c.Y -eq $script:musCY) { return }   # musa i ro og ikonet framme: ingenting å gjøre
+    $script:musCX = $c.X; $script:musCY = $c.Y; $script:musFramme = $false
+    $wa = [Windows.Forms.Screen]::FromPoint($c).WorkingArea
+    $m = Mus-Mål $c.X $c.Y 40 40 $wa
+    if ($null -eq $script:musX) { $script:musX = [double]$m[0]; $script:musY = [double]$m[1] }
+    else {
+        $dx = $m[0] - $script:musX; $dy = $m[1] - $script:musY
+        if ([Math]::Abs($dx) -lt 1 -and [Math]::Abs($dy) -lt 1) { $script:musFramme = $true; if ($dx -eq 0 -and $dy -eq 0) { return }; $script:musX = [double]$m[0]; $script:musY = [double]$m[1] }
+        else { $script:musX += $dx * 0.3; $script:musY += $dy * 0.3 }
+    }
+    if (-not $script:musVist) { $mus.Show(); $mus.Vis($musBmp, [int]$script:musX, [int]$script:musY); $script:musVist = $true }
+    else { $mus.Flytt([int][Math]::Round($script:musX), [int][Math]::Round($script:musY)) }
+})
+$musKlokke.Start()
+
 # Klokke 2 (700 ms): oppfølgingen under veiledning.
 $veiKlokke = New-Object Windows.Forms.Timer
 $veiKlokke.Interval = 700
@@ -1567,7 +1607,7 @@ $animKlokke.Add_Tick({
     if ($script:tipsTil -and [DateTime]::Now -gt $script:tipsTil) { $lblTips.Text = $TipsStandard; $script:tipsTil = $null }
     if ($script:toastTil -and [DateTime]::Now -gt $script:toastTil) { $script:toastTil = $null; $tegn = $true }
     if ($tegn -or $script:jobb) { $form.Invalidate() }
-    if (($script:toppT = 1 + [int]$script:toppT) % 5 -eq 0) { foreach ($f in @($overlegg, $ramme, $peker)) { [Vin]::Topp($f) } }   # hold tegningen over oppgavelinja og menyer
+    if (($script:toppT = 1 + [int]$script:toppT) % 5 -eq 0) { foreach ($f in @($overlegg, $ramme, $peker, $mus)) { [Vin]::Topp($f) } }   # hold tegningen over oppgavelinja og menyer
     if ($script:ovShapes -and $overlegg.Visible) {
         $script:ovFrame++; $alder = ([DateTime]::Now - $script:ovStart).TotalSeconds
         if ($alder -lt 1.4 -or $script:ovFrame % 4 -eq 0 -or $script:ovNy) { $script:ovNy = $false; Tegn-Overlegg }
