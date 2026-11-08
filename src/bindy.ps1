@@ -1634,7 +1634,7 @@ $musKlokke.Add_Tick({
     $dv = (($script:musRetMål - $script:musRet + 540) % 360) - 180
     if ([Math]::Abs($dv) -gt 0.5) { $script:musRet += $dv * 0.2; $ny = $true }
     if ($ny -or -not $script:musBmp) {
-        $gammel = $script:musBmp; $script:musBmp = Tegn-Mus $tekst $script:musVinkel $script:musRet; $script:musB = $script:musBmp.Width
+        $gammel = $script:musBmp; $script:musBmp = Tegn-Mus $tekst $script:musVinkel $script:musRet $alfa; $script:musB = $script:musBmp.Width
         if ($gammel) { $gammel.Dispose() }
         if ($script:musVist) { $mus.Vis($script:musBmp, [int][Math]::Round($script:musX), [int][Math]::Round($script:musY)) }
     }
