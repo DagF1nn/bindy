@@ -654,7 +654,7 @@ function Lag-Spørsmål([string]$q, $logg, [int]$b, [int]$h, [string]$modus, [st
     $bilde = $(if ($alle) { "Bildet viser ALLE skjermene side om side og er $b x $h piksler." } else { "Bildet viser ett vindu og er $b x $h piksler." })
     switch ($modus) {
         'start' { return $s + "$bilde brukeren vil bli veiledet steg for steg gjennom: $q`nGi BARE neste steg: én kort setning om hva han skal gjøre nå, og avslutt med $mark rundt akkurat det han skal trykke på eller bruke. Første linje i svaret skal være: STATUS: STEG. Hvert steg er ÉN fysisk handling (ett klikk, eller skriv ett ord), aldri flere handlinger i samme steg, og alltid med MARKER rundt elementet og [[PEKER x y]] på det ene punktet han skal trykke på, så han aldri må lete. Velg selv den raskeste veien når flere går (ikke spør om det). Unntak: må du spørre fordi alternativene gir ulike resultater, skriv STATUS: SPØRSMÅL som første linje, ett kort spørsmål og 2-4 linjer [[VALG kort tekst]] (ingen MARKER, ingen steg ennå)." }
-        'sjekk' { return $s + "VEILEDNING PÅGÅR. brukerens mål (det han selv ba om): «$($script:veiMål)». Steget du ga sist: «$steg». $($script:ståttNote)Skjermen har endret seg siden. $bilde Første linje i svaret skal være nøyaktig én av disse:`nSTATUS: GJORT (steget er gjort: gi så neste steg, én kort setning med én enkelt handling, og avslutt med $mark pluss [[PEKER x y]] på det ene punktet han skal trykke på)`nSTATUS: IKKE_GJORT (ikke gjort ennå: si kort hva som mangler, og $mark om relevant)`nSTATUS: FERDIG (hele oppgaven er ferdig: si det kort)`nSkriv ingenting før STATUS-linja." }
+        'sjekk' { return $s + "VEILEDNING PÅGÅR. brukerens mål (det han selv ba om): «$($script:veiMål)». Steget du ga sist: «$steg». $($script:ståttNote)Skjermen har endret seg siden. Bildet er tatt ETTER at brukeren handlet: vurder ut fra hva skjermen viser nå. Er resultatet av steget synlig (for eksempel at menyen eller vinduet har åpnet seg), svar GJORT selv om det ser litt annerledes ut enn du ventet. Svar IKKE_GJORT bare når du ser at det ikke har skjedd. $bilde Første linje i svaret skal være nøyaktig én av disse:`nSTATUS: GJORT (steget er gjort: gi så neste steg, én kort setning med én enkelt handling, og avslutt med $mark pluss [[PEKER x y]] på det ene punktet han skal trykke på)`nSTATUS: IKKE_GJORT (ikke gjort ennå: si kort hva som mangler, og $mark om relevant)`nSTATUS: FERDIG (hele oppgaven er ferdig: si det kort)`nSkriv ingenting før STATUS-linja." }
         default {
             if ($b -le 0) { return $s + "brukerens spørsmål (ingen skjermbilde vedlagt): $q" }
             return $s + "$bilde brukerens spørsmål: $q`n`n(Handler spørsmålet om hvor noe er eller hvor han skal trykke, MÅ siste linje i svaret være $mark i bildets piksler.)"
@@ -1412,7 +1412,7 @@ function Stopp-Veiledning([string]$grunn) {
 }
 
 # Sender et nytt bilde til Claude fordi skjermen har endret seg. $sig er signaturen vi målte rett før.
-function Send-Sjekk($sig) {
+function Send-Sjekk($sig, [string]$modell = $ModellSjekk) {
     if ($script:veiSjekk -ge $MaksSjekker) { Stopp-Veiledning "Veiledningen stoppet etter $MaksSjekker sjekker."; return }
     $f = Fang-Etter $(if ($script:veiAlle) { 'alle' } else { 'vindu' })
     if (-not $f.ok) { return }
@@ -1420,10 +1420,11 @@ function Send-Sjekk($sig) {
     $script:veiSjekk++; $script:veiKlikkTid = $null; $script:veiSist = Get-Date
     $script:sporring = '(skjermen endret seg)'; $script:kallModus = 'sjekk'; $script:kallSig = $sig; $script:alleForsøkt = $script:alle
     $script:tenkTekst = 'Sjekker'
-    Kjør-Kall 'sjekk' '' $ModellSjekk
+    Kjør-Kall 'sjekk' '' $modell
 }
 
 # Følger med: ser etter klikk og skjermendringer (lokalt og gratis) og ber Claude om en ny vurdering når det trengs.
+# Balanse: raskt etter klikk (men vent til skjermen har roet seg), sterkere modell når brukeren har klikket, og rolig uten klikk (stor endring, haiku, og et «ikke gjort» vises ikke).
 function Følg-Med {
     if (-not $script:vei -or $script:jobb -or $script:pause) { return }
     $nå = Get-Date
@@ -1431,29 +1432,36 @@ function Følg-Med {
     $sig = Ta-Signatur
     if (-not $sig) { return }
     if ($sig.blokkert) { return }   # sperret vindu: jeg ser ikke på det
-    $endret = (Sig-Diff $sig $script:veiSig) -gt 4
+    $diff = Sig-Diff $sig $script:veiSig; $endret = $diff -gt 4
+    $rolig = $script:veiForrige -and (Sig-Diff $sig $script:veiForrige) -le 3; $script:veiForrige = $sig   # skjermen er lik forrige måling (animasjonen er ferdig)
     if ([MuseKrok]::Teller -ne $script:veiKlikkTeller) {   # nytt klikk
         $script:veiKlikkTeller = [MuseKrok]::Teller
         $kp = New-Object Drawing.Point([MuseKrok]::X, [MuseKrok]::Y)
         if (-not ($form.Visible -and (Øy-Rekt).Contains($kp))) { $script:veiKlikkTid = $nå; $script:veiKlikkPos = $kp; $script:veiUtenAkt = $nå }
     }
-    $trigger = $false
+    $trigger = $false; $klikk = $false; $note = ''
     if ($script:veiKlikkTid) {
         $v = ($nå - $script:veiKlikkTid).TotalSeconds
         $iMål = $script:mål -and $script:veiKlikkPos.X -ge $script:mål[0] -and $script:veiKlikkPos.X -le $script:mål[2] -and $script:veiKlikkPos.Y -ge $script:mål[1] -and $script:veiKlikkPos.Y -le $script:mål[3]
-        if ($v -ge 1.8 -and ($endret -or ($iMål -and $v -ge 3.5))) { $trigger = $true }
+        if (($v -ge 1.0 -and $endret -and $rolig) -or ($iMål -and $v -ge 2.5 -and $rolig) -or ($v -ge 5 -and $endret)) {
+            $trigger = $true; $klikk = $true
+            $note = $(if ($iMål) { 'brukeren klikket INNE i det markerte målet for steget. ' } else { 'brukeren klikket UTENFOR det markerte målet for steget (kanskje et annet sted som også virker). ' })
+        }
         if ($v -gt 8) { $script:veiKlikkTid = $null }   # klikk uten virkning
     }
     if ($endret) {   # skjermen har endret seg uten klikk (for eksempel et nytt vindu): vent til den har roet seg
         if ($script:veiPrev -and (Sig-Diff $sig $script:veiPrev) -le 4) { $script:veiStabil++ } else { $script:veiStabil = 0 }
         $script:veiPrev = $sig; $script:veiUtenAkt = $nå
-        if ($script:veiStabil -ge 2) { $trigger = $true }
+        if ($script:veiStabil -ge 2 -and $diff -gt 9 -and -not $script:veiKlikkTid -and -not $trigger) { $trigger = $true; $note = 'ingen klikk registrert; skjermen endret seg av seg selv. ' }
     } else { $script:veiStabil = 0; $script:veiPrev = $null }
     if (-not $trigger -and -not $script:veiKlikkTid -and -not $script:veiHjelpt -and $script:veiSteg -and ($nå - $script:veiSist).TotalSeconds -ge 35) {   # brukeren står stille: steget var nok uklart
         $script:veiHjelpt = $true; $script:ståttNote = 'brukeren har stått stille i over 30 sekunder uten å klikke, så steget var nok uklart. Forklar det enklere, ÉN handling, og pek helt presist (MARKER og PEKER). Svar STATUS: IKKE_GJORT. '
-        Send-Sjekk $sig; $script:ståttNote = ''; return
+        Send-Sjekk $sig $ModellSjekk; $script:ståttNote = ''; return
     }
-    if ($trigger -and ($nå - $script:veiSist).TotalSeconds -ge 4) { Send-Sjekk $sig }
+    if ($trigger -and ($nå - $script:veiSist).TotalSeconds -ge 2) {
+        $script:ståttNote = $note; $script:stilleSjekk = -not $klikk
+        Send-Sjekk $sig $(if ($klikk) { $ModellSpør } else { $ModellSjekk }); $script:ståttNote = ''
+    }
 }
 
 # ---------------------------------------------------------------- tray og hurtigtast
@@ -1493,6 +1501,8 @@ function Behandle-Svar($j) {
         if ($d.behov -and -not $script:alleForsøkt -and -not $script:pause) {   # Claude vil se mer: alle skjermene
             if (Prøv-Igjen-Alle) { return }
         }
+        $stille = $script:stilleSjekk; $script:stilleSjekk = $false
+        if ($stille -and $script:kallModus -eq 'sjekk' -and $d.status -eq 'IKKE_GJORT') { $script:veiSig = $script:kallSig; $script:veiSist = Get-Date; $script:jobb = $null; $script:bob = 0; Oppdater-Ikon; return }   # uten klikk: et «ikke gjort» vises ikke
         if (-not $d.tekst -and $d.behov) { $d.tekst = 'Jeg trenger å se mer enn dette vinduet, men fikk ikke tatt bilde av alle skjermene.' }
         [void]$script:logg.Add(@{ q = $script:sporring; a = $d.tekst; t = Get-Date })
         $svar.ForeColor = $cTekst; Sett-Svar $d.tekst (-not $script:strømmer)
@@ -1601,6 +1611,7 @@ $musKlokke.Interval = 16
 $musKlokke.Add_Tick({
     if ($script:pause) { if ($script:musVist) { $mus.Hide(); $script:musVist = $false; $script:musX = $null; $script:musFramme = $false }; return }
     if ($musInn.Visible) { return }   # skrivefeltet står ved siden av: bindersen holder seg i ro
+    if ($peker.Visible -and $script:jobb) { $script:musX = $script:px - 20; $script:musY = $script:py - 20; $script:musFramme = $false; $script:musRet = -90.0; $peker.Hide() }   # Bindy tenker: bindersen går tilbake til å følge musa (og flyr ut igjen med neste svar)
     if ($peker.Visible) {   # veiledning: det er denne bindersen som flyr til målet (pekeren overtar), og den kommer tilbake herfra når pekeren er ferdig
         if ($script:musVist) { $mus.Hide(); $script:musVist = $false }
         $script:musX = $script:px - 20; $script:musY = $script:py - 20; $script:musFramme = $false; $script:musRet = -90.0; return
@@ -1661,7 +1672,7 @@ $musInn.Add_Deactivate({ if ($musInn.Visible -and -not $script:musInnLukker) { S
 
 # Klokke 2 (700 ms): oppfølgingen under veiledning.
 $veiKlokke = New-Object Windows.Forms.Timer
-$veiKlokke.Interval = 700
+$veiKlokke.Interval = 450
 $veiKlokke.Add_Tick({ try { Følg-Med } catch { } })
 
 # Klokke 3 (30 ms): animasjoner: øya vokser og krymper, tones inn og ut, binders hopper, ring, skrivemaskin, peker.
