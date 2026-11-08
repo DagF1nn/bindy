@@ -22,7 +22,7 @@ Dette betyr:
 ## Hva Bindy ikke gjør
 
 - Ingen nettverkskall bortsett fra de `claude` selv gjør. Bindy har ingen egen server og ingen egen telemetri.
-- Ingen taster registreres. Under veiledning leses bare *hvor* og *når* du klikker med venstre museknapp.
+- Ingen taster registreres. Under veiledning leses bare *hvor* og *når* du klikker med venstre museknapp, og til Claude sendes bare om klikket traff det markerte målet (ja/nei), ikke posisjonen.
 - Bindy skriver aldri skjermbilder til disk. Den ber også Claude Code om ikke å lagre økten (`--no-session-persistence`).
 - Claude får **ingen verktøy** (`--tools ""`: ikke filer, ikke nett, ikke kommandolinje) og leser ingen innstillinger eller hooks fra mapper (`--setting-sources ""`). Bindy starter bare en **programfil** `claude` (aldri `.cmd` eller `.ps1`) og fjerner `NODE_OPTIONS` fra miljøet til den.
 - Bindy limer aldri inn noe uten at du trykker «Lim inn», og nekter å lime inn i passord- og bankvinduer.
@@ -34,6 +34,9 @@ Dette betyr:
 - **UI-tilgang** senker grensen mellom vanlige og administrator-vinduer for denne ene prosessen (se over).
 - **Kode som allerede kjører som deg** kan prøve å få egen kode inn i Bindy-prosessen uten å røre `Program Files`: PowerShell kompilerer noen hjelpeklasser (`Add-Type`) til `%TEMP%` ved oppstart, og miljøvariabler og `HKCU` styres av brukeren (for eksempel `COR_PROFILER`). Verten rydder `PSModulePath`, men dette er ikke fullt lukket. Det er en grunn til å bare kjøre Bindy på en maskin du stoler på.
 - Bindy kopierer ikke automatisk lenker. Tekst Claude foreslår limes inn først når du trykker «Lim inn», og aldri i administrator-vinduer, passord- eller bankvinduer.
+- **Claude kan utløse «alle skjermer»:** står det tekst på skjermen som får Claude til å be om å se mer, tar Bindy bilde av alle skjermer uten ny bekreftelse (sperrelista gjelder). Under veiledning sendes dessuten nye bilder automatisk, også når du bytter vindu.
+- **Innstillingsfiler kan skrives av kode som kjører som deg:** `bindy-del-utklipp`, `bindy-musefolger-av` og `bindy-oppgave.md` i `%LOCALAPPDATA%\Bindy`. Kode som allerede kjører som deg kan dermed slå på deling av utklipp eller legge tekst inn i det Claude får se. Den kan allerede ta skjermbilder selv, så gevinsten er liten, men du bør vite det.
+- Skrivefeltet som kommer ved bindersen tar tastaturfokus når du trykker hurtigtasten. Trykker du den midt i et passordfelt, havner resten av tastetrykkene der.
 - Bindy er ikke revidert av en uavhengig part.
 
 ## Anbefalt bruk

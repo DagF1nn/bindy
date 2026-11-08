@@ -159,6 +159,7 @@ public static class Vin {
     [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr h);
     [DllImport("winmm.dll")] public static extern uint timeBeginPeriod(uint ms);   // 1 ms klokkeoppløsning: glatte animasjoner
+    [DllImport("winmm.dll")] public static extern uint timeEndPeriod(uint ms);
     [DllImport("user32.dll")] public static extern IntPtr GetTopWindow(IntPtr h);
     [DllImport("user32.dll")] public static extern IntPtr GetWindow(IntPtr h, uint cmd);
     [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr h);
@@ -738,6 +739,7 @@ function Mus-Mål([int]$cx, [int]$cy, [int]$b, [int]$h, $wa) {
     $d = 32; $x = $cx + $d; $y = $cy + $d
     if ($x + $b -gt $wa.Right) { $x = $cx - $d - $b }
     if ($y + $h -gt $wa.Bottom) { $y = $cy - $d - $h }
+    if ($x -lt $wa.Left) { $x = $wa.Left }; if ($y -lt $wa.Top) { $y = $wa.Top }
     return @($x, $y)
 }
 
@@ -1330,7 +1332,7 @@ function Sett-Pause([bool]$p) {
     if ($script:pause -eq $p) { return }
     $script:pause = $p
     if ($pauseKnapp.Checked -ne $p) { $pauseKnapp.Checked = $p }
-    if ($p) { [MuseKrok]::Stopp(); Skjul-Ramme; $peker.Hide() }
+    if ($p) { [MuseKrok]::Stopp(); Skjul-Ramme; $peker.Hide(); $script:jpeg = $null; $script:geom = $null; $script:tittel = '' }   # pause: gammelt bilde slettes
     elseif ($script:vei) { $script:veiKlikkTeller = [MuseKrok]::Teller; [MuseKrok]::Start(); $script:veiUtenAkt = Get-Date }
     Oppdater-Ikon; Sett-Toast $(if ($p) { 'Pauset' } else { 'På igjen' })
 }
@@ -1605,30 +1607,29 @@ function Mus-Tekst {
     if ($script:strømmer) { return 'Skriver svar…' }
     return "$($script:tenkTekst)…"
 }
-function Tegn-Mus([string]$tekst, [int]$vinkel, [double]$ret, [double]$alfa = 1.0) {
+$script:musMG = [Drawing.Graphics]::FromImage((New-Object Drawing.Bitmap(1, 1)))   # gjenbrukt for måling av tekstbredde
+function Tegn-Mus([string]$tekst, [int]$vinkel, [double]$ret, [double]$alfa = 1.0, [bool]$venstre = $false) {
     $b = 40
-    if ($tekst) {
-        $tmp = [Drawing.Graphics]::FromImage((New-Object Drawing.Bitmap(1, 1)))
-        $tw = [int][Math]::Ceiling($tmp.MeasureString($tekst, $fSmå).Width); $tmp.Dispose()
-        $b = 40 + 4 + 30 + $tw
-    }
+    if ($tekst) { $b = 40 + 4 + 30 + [int][Math]::Ceiling($script:musMG.MeasureString($tekst, $fSmå).Width) }
+    $xi = $(if ($venstre) { $b - 40 } else { 0 })   # ikonets plass: pillen står på motsatt side når den ellers ville gå utenfor skjermkanten
     $bmp = New-Object Drawing.Bitmap($b, 40, [Drawing.Imaging.PixelFormat]::Format32bppPArgb)
     $g = [Drawing.Graphics]::FromImage($bmp); $g.SmoothingMode = 'AntiAlias'; $g.TextRenderingHint = 'AntiAliasGridFit'
-    $st = $g.Save(); $g.TranslateTransform(18, 19); $g.RotateTransform([single](180 + $ret + 90)); $g.TranslateTransform(-18, -19)   # utstikkeren opp i hvile (ret = -90), ellers i bevegelsesretningen
+    $st = $g.Save(); $g.TranslateTransform($xi + 18, 19); $g.RotateTransform([single](180 + $ret + 90)); $g.TranslateTransform(-18, -19)   # utstikkeren opp i hvile (ret = -90), ellers i bevegelsesretningen
     [Binders]::Tegn($g, 12, 4, 30, [Drawing.Color]::FromArgb(11, 10, 18), 5); [Binders]::Tegn($g, 12, 4, 30, [Drawing.Color]::FromArgb(196, 192, 222), 2.5)
     $g.Restore($st)
     if ($tekst) {
-        $pill = New-Object Drawing.Drawing2D.GraphicsPath; $x0 = 44; $w = $b - 44
+        $x0 = $(if ($venstre) { 0 } else { 44 }); $w = $b - 44
+        $pill = New-Object Drawing.Drawing2D.GraphicsPath
         $pill.AddArc($x0, 6, 28, 28, 90, 180); $pill.AddArc($x0 + $w - 28, 6, 28, 28, 270, 180); $pill.CloseFigure()
         $bak = New-Object Drawing.SolidBrush([Drawing.Color]::FromArgb([int](225 * $alfa), 11, 10, 18)); $g.FillPath($bak, $pill); $bak.Dispose(); $pill.Dispose()
-        $pen = New-Object Drawing.Pen([Drawing.Color]::FromArgb([int](196 * $alfa), 192, 222), 2); $pen.StartCap = 'Round'; $pen.EndCap = 'Round'
+        $pen = New-Object Drawing.Pen([Drawing.Color]::FromArgb([int](196 * $alfa), 196, 192, 222), 2); $pen.StartCap = 'Round'; $pen.EndCap = 'Round'
         $g.DrawArc($pen, $x0 + 9, 13, 14, 14, $vinkel, 250); $pen.Dispose()
-        $tb = New-Object Drawing.SolidBrush([Drawing.Color]::FromArgb([int](217 * $alfa), 214, 238)); $sf = New-Object Drawing.StringFormat; $sf.LineAlignment = 'Center'
-        $g.DrawString($tekst, $fSmå, $tb, (New-Object Drawing.RectangleF(($x0 + 30), 6, ($b - $x0 - 30), 28)), $sf); $tb.Dispose(); $sf.Dispose()
+        $tb = New-Object Drawing.SolidBrush([Drawing.Color]::FromArgb([int](217 * $alfa), 217, 214, 238)); $sf = New-Object Drawing.StringFormat; $sf.LineAlignment = 'Center'
+        $g.DrawString($tekst, $fSmå, $tb, (New-Object Drawing.RectangleF(($x0 + 30), 6, ($w - 30), 28)), $sf); $tb.Dispose(); $sf.Dispose()
     }
     $g.Dispose(); return $bmp
 }
-$script:musTekst = $null; $script:musVinkel = 0; $script:musBmp = $null; $script:musB = 40
+$script:musTekst = $null; $script:musVinkel = 0; $script:musBmp = $null; $script:musB = 40; $script:musVenstre = $false; $script:musWaR = 99999
 $script:musRefT = 0; $script:musRefX = 0; $script:musRefY = 0
 $script:musRet = -90.0; $script:musRetMål = -90.0; $script:musStille = 0; $script:musCX = 0; $script:musCY = 0
 $musKlokke = New-Object Windows.Forms.Timer
@@ -1647,8 +1648,10 @@ $musKlokke.Add_Tick({
     }
     $tekst = Mus-Tekst; $ny = $false; $alfa = 1.0
     if ($tekst) { $script:musSist = $tekst; $script:musFade = 12 }
-    elseif ($script:musFade -gt 0 -and $script:musSist) { $script:musFade -= $dt / 16.0; $tekst = $script:musSist; $alfa = [Math]::Max(0, $script:musFade / 12.0); $ny = $true }   # myk fade ut når tenkingen er ferdig
-    if ($tekst) { $script:musVinkel = ($script:musVinkel + 1.5 * $dt) % 360; if (-not $script:musBmp -or ($nu - $script:musTegnT) -ge 33) { $ny = $true } }
+    elseif ($script:musFade -gt 0 -and $script:musSist) {   # myk fade ut når tenkingen er ferdig (ikke med «reduser animasjon»)
+        if ($script:rolig) { $script:musFade = 0 } else { $script:musFade -= $dt / 16.0; $tekst = $script:musSist; $alfa = [Math]::Max(0, $script:musFade / 12.0); $ny = $true }
+    }
+    if ($tekst) { if (-not $script:rolig) { $script:musVinkel = ($script:musVinkel + 0.5 * $dt) % 360 }; if (-not $script:musBmp -or (-not $script:rolig -and ($nu - $script:musTegnT) -ge 33)) { $ny = $true } }
     if ($tekst -ne $script:musTekst) { $script:musTekst = $tekst; $ny = $true }
     $c = [Windows.Forms.Cursor]::Position
     $cdx = $c.X - $script:musCX; $cdy = $c.Y - $script:musCY
@@ -1658,35 +1661,40 @@ $musKlokke.Add_Tick({
         else { $script:musStille += $nu - $script:musRefT }
         $script:musRefT = $nu; $script:musRefX = $c.X; $script:musRefY = $c.Y
     }
-    if ($script:musStille -gt 100) { $script:musRetMål = -90.0 }   # musa har stoppet: rett seg opp
+    if ($script:musStille -gt 100 -or $script:rolig) { $script:musRetMål = -90.0 }   # musa har stoppet (eller «reduser animasjon»): rett opp
     $dv = (($script:musRetMål - $script:musRet + 540) % 360) - 180
-    if ([Math]::Abs($dv) -gt 0.5) { $script:musRet += $dv * (1 - [Math]::Exp(-$dt / 70.0)); $ny = $true }
+    if ([Math]::Abs($dv) -gt 0.5) { $script:musRet += $dv * $(if ($script:rolig) { 1 } else { 1 - [Math]::Exp(-$dt / 70.0) }); $ny = $true }
+    $v = ($null -ne $script:musX) -and ($script:musX + $script:musB -gt $script:musWaR)   # pillen vil gå utenfor høyre kant: legg den til venstre for ikonet
+    if ($v -ne $script:musVenstre) { $script:musVenstre = $v; $ny = $true }
+    $vx = $(if ($script:musVenstre) { $script:musB - 40 } else { 0 })   # vinduet starter så langt til venstre for ikonet
     if ($ny -or -not $script:musBmp) {
-        $gammel = $script:musBmp; $script:musBmp = Tegn-Mus $tekst $script:musVinkel $script:musRet $alfa; $script:musB = $script:musBmp.Width; $script:musTegnT = $nu
+        $gammel = $script:musBmp; $script:musBmp = Tegn-Mus $tekst $script:musVinkel $script:musRet $alfa $script:musVenstre; $script:musB = $script:musBmp.Width; $script:musTegnT = $nu
+        $vx = $(if ($script:musVenstre) { $script:musB - 40 } else { 0 })
         if ($gammel) { $gammel.Dispose() }
-        if ($script:musVist) { $mus.Vis($script:musBmp, [int][Math]::Round($script:musX), [int][Math]::Round($script:musY)) }
+        if ($script:musVist) { $mus.Vis($script:musBmp, [int][Math]::Round($script:musX) - $vx, [int][Math]::Round($script:musY)) }
     }
     if ($script:musFramme -and -not $ny -and $cdx -eq 0 -and $cdy -eq 0) { return }   # musa i ro og ikonet framme: ingenting å gjøre
     $script:musCX = $c.X; $script:musCY = $c.Y; $script:musFramme = $false
-    $wa = [Windows.Forms.Screen]::FromPoint($c).WorkingArea
-    $m = Mus-Mål $c.X $c.Y $script:musB 40 $wa
+    $wa = [Windows.Forms.Screen]::FromPoint($c).WorkingArea; $script:musWaR = $wa.Right
+    $m = Mus-Mål $c.X $c.Y 40 40 $wa   # ikonet holder seg alltid ved musa; bare pillen flippes
     if ($null -eq $script:musX) { $script:musX = [double]$m[0]; $script:musY = [double]$m[1] }
     else {
         $dx = $m[0] - $script:musX; $dy = $m[1] - $script:musY
         if ([Math]::Abs($dx) -lt 1 -and [Math]::Abs($dy) -lt 1) { $script:musFramme = $true; if ($dx -eq 0 -and $dy -eq 0) { return }; $script:musX = [double]$m[0]; $script:musY = [double]$m[1] }
-        else { $k = 1 - [Math]::Exp(-$dt / 45.0); $script:musX += $dx * $k; $script:musY += $dy * $k }
+        else { $k = $(if ($script:rolig) { 1 } else { 1 - [Math]::Exp(-$dt / 45.0) }); $script:musX += $dx * $k; $script:musY += $dy * $k }
     }
-    if (-not $script:musVist) { $mus.Show(); $mus.Vis($script:musBmp, [int][Math]::Round($script:musX), [int][Math]::Round($script:musY)); $script:musVist = $true }
-    else { $mus.Flytt([int][Math]::Round($script:musX), [int][Math]::Round($script:musY)) }
+    $wx = [int][Math]::Round($script:musX) - $vx; $wy = [int][Math]::Round($script:musY)
+    if (-not $script:musVist) { $mus.Show(); $mus.Vis($script:musBmp, $wx, $wy); $script:musVist = $true }
+    else { $mus.Flytt($wx, $wy) }
 })
 $musKlokke.Start()
 
 # Skrivefeltet som dukker opp ved bindersen når du trykker hurtigtasten. Enter spør, Ctrl+Enter veileder, Esc eller å klikke bort lukker.
-$musInn = New-Object InnVindu; $musInn.BackColor = (Farge '#3a3656'); $musInn.Padding = New-Object Windows.Forms.Padding(1); $musInn.Size = New-Object Drawing.Size((S 270), (S 42))
+$musInn = New-Object InnVindu; $musInn.BackColor = (Farge '#6a6590'); $musInn.Text = 'Spør Bindy'; $musInn.AccessibleName = 'Spør Bindy'; $musInn.Padding = New-Object Windows.Forms.Padding(1); $musInn.Size = New-Object Drawing.Size((S 320), (S 42))
 $musInnPanel = New-Object Windows.Forms.Panel; $musInnPanel.Dock = 'Fill'; $musInnPanel.BackColor = $cFlate; $musInnPanel.Padding = New-Object Windows.Forms.Padding((S 20), (S 12), (S 16), (S 4))
 $musInnTb = New-Object Windows.Forms.TextBox; $musInnTb.BorderStyle = 'None'; $musInnTb.BackColor = $cFlate; $musInnTb.ForeColor = $cTekst; $musInnTb.Font = $fTekst; $musInnTb.Dock = 'Fill'
 $musInnTb.AccessibleName = 'Spør Bindy'
-$musInnTb.Add_HandleCreated({ [void][Vin]::SendMessage($musInnTb.Handle, 0x1501, 1, 'Spør om noe …') })
+$musInnTb.Add_HandleCreated({ [void][Vin]::SendMessage($musInnTb.Handle, 0x1501, 1, 'Spør (Enter)  ·  veiled (Ctrl+Enter)') })
 $musInnPanel.Controls.Add($musInnTb); $musInn.Controls.Add($musInnPanel)
 $script:musInnLukker = $false
 function Skjul-MusInn { $script:musInnLukker = $true; $musInn.Hide(); $script:musInnLukker = $false }
@@ -1698,6 +1706,7 @@ function Vis-MusInn {
     $y = [Math]::Min([Math]::Max($wa.Top, $my + 20 - [int]($musInn.Height / 2)), $wa.Bottom - $musInn.Height)
     $musInnTb.Text = ''; $musInn.Location = New-Object Drawing.Point($x, $y); $musInn.Show(); [Vin]::Topp($musInn)
     [void][Vin]::SetForegroundWindow($musInn.Handle); $musInn.Activate(); $musInnTb.Focus()
+    if ([Vin]::GetForegroundWindow() -ne $musInn.Handle) { Skjul-MusInn; Skjul-Mentor }   # fikk ikke fokus: lukk i stedet for å la bildet bli liggende
 }
 $musInnTb.Add_KeyDown({
     if ($_.KeyCode -eq 'Enter') { $_.SuppressKeyPress = $true; $inn.Text = $musInnTb.Text; Skjul-MusInn; Send-Spørsmål $(if ($_.Control) { 'start' } else { 'spor' }) }
@@ -1773,4 +1782,4 @@ $hk.add_Trykket({ param($id) try {
     Vis-MusInn
 } catch { Add-Content (Join-Path $Mappe 'bindy-feil.log') "$(Get-Date -Format s) $_"; $tray.ShowBalloonTip(4000, 'Bindy', "Feil: $_", 'Error') } })
 
-try { [Windows.Forms.Application]::Run() } finally { $hk.Dispose(); [MuseKrok]::Stopp() }
+try { [Windows.Forms.Application]::Run() } finally { $hk.Dispose(); [MuseKrok]::Stopp(); [void][Vin]::timeEndPeriod(1) }

@@ -6,7 +6,8 @@ Bindy samler ikke inn noe selv, har ingen konto og ingen server. Men den sender 
 
 | Når | Hva sendes | Merk |
 |---|---|---|
-| Ctrl+Alt+H og under veiledning | Skjermbilde av aktivt vindu (maks 1280 px bredt) eller alle skjermer (maks 2000 px) | Fanges bare når du trykker, når «Skjerm» er på, og under en veiledning du har startet |
+| Ctrl+Alt+H og under veiledning | Skjermbilde av aktivt vindu (maks 1280 px bredt) eller alle skjermer (maks 2000 px) | Fanges når du trykker, når «Skjerm» er på, og **automatisk under en veiledning du har startet**: ved klikk, når skjermen endrer seg (også uten klikk, og også når du bytter til et annet vindu), og når du har stått stille i over 30 s (maks 30 bilder, stopper etter 5 min uten aktivitet). **Claude kan også be om å få se alle skjermer**, og Bindy tar da bildet uten ny bekreftelse. Sperrelista gjelder fortsatt |
+| Under veiledning | Et kort notat om du klikket **inne i** eller **utenfor** det markerte målet, eller at ingen klikk ble registrert | Bare ja/nei, aldri koordinater eller hvilken app |
 | Alltid | Det du skriver, og de siste spørsmålene og svarene (maks 6, glemmes etter 10 min) | |
 | Alltid | Oppgavenotatet (`bindy-oppgave.md`, maks 3000 tegn), hvis det finnes | Lagres lokalt, se under |
 | **Bare hvis du slår på «Del utklipp med Claude»** | De 6 siste kopiene, hver maks 200 tegn | **Av som standard** |
@@ -29,6 +30,7 @@ Alt ligger i `%LOCALAPPDATA%\Bindy\`:
 | `bindy-feil.log` | Feilmeldinger (kan inneholde tekst fra Claude), kuttes ved 100 kB |
 | `bindy-host-feil.log` | Feil fra starteren (`BindyStart.exe`), sjelden |
 | `bindy-del-utklipp` | Tom fil: finnes den, er deling av utklipp på |
+| `bindy-musefolger-av` | Tom fil: finnes den, er musefølgeren (binders ved musepekeren) slått av |
 
 **Bindy skriver aldri skjermbilder til disk.** De ligger bare i minnet til de er sendt, og Bindy ber Claude Code om ikke å lagre økten (`--no-session-persistence`).
 Utklippshistorikken (maks 8, maks 400 tegn, slettes etter 60 min) ligger bare i minnet.
