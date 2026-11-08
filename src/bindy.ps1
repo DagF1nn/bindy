@@ -324,54 +324,43 @@ public class Mentor : Form {
     }
     protected override bool ShowWithoutActivation { get { return true; } }
 }
-// Tray-menyen i samme mørke stil som resten av Bindy.
-public class MorkFarger : ProfessionalColorTable {
-    static Color C(int r, int g, int b) { return Color.FromArgb(r, g, b); }
-    public override Color ToolStripDropDownBackground { get { return C(20, 18, 30); } }
-    public override Color MenuBorder { get { return C(38, 35, 58); } }
-    public override Color MenuItemBorder { get { return C(143, 135, 194); } }
-    public override Color MenuItemSelected { get { return C(38, 35, 58); } }
-    public override Color ImageMarginGradientBegin { get { return C(20, 18, 30); } }
-    public override Color ImageMarginGradientMiddle { get { return C(20, 18, 30); } }
-    public override Color ImageMarginGradientEnd { get { return C(20, 18, 30); } }
-    public override Color SeparatorDark { get { return C(38, 35, 58); } }
-    public override Color SeparatorLight { get { return C(38, 35, 58); } }
-    public override Color CheckBackground { get { return C(38, 35, 58); } }
-    public override Color CheckSelectedBackground { get { return C(38, 35, 58); } }
-    public override Color CheckPressedBackground { get { return C(38, 35, 58); } }
-    public override Color ButtonSelectedHighlight { get { return C(38, 35, 58); } }
-    public override Color ButtonSelectedHighlightBorder { get { return C(143, 135, 194); } }
-    public override Color ButtonCheckedHighlight { get { return C(38, 35, 58); } }
-    public override Color ButtonCheckedHighlightBorder { get { return C(143, 135, 194); } }
-    public override Color ButtonCheckedGradientBegin { get { return C(38, 35, 58); } }
-    public override Color ButtonCheckedGradientMiddle { get { return C(38, 35, 58); } }
-    public override Color ButtonCheckedGradientEnd { get { return C(38, 35, 58); } }
-    public override Color ButtonSelectedBorder { get { return C(143, 135, 194); } }
-}
-// Tray-menyen: avrundet, dempet flate, tydelig hake i aksentfarge og avrundet markering (som RedScreen).
+// Tray-menyen: samme stil og farger som RedScreens tray-meny (avrundet, ingen kant, hake i aksentfarge).
 public class MorkMeny : ToolStripProfessionalRenderer {
-    static Color Fl = Color.FromArgb(30, 28, 42), Kant = Color.FromArgb(56, 52, 78), Mark = Color.FromArgb(54, 50, 76), Aks = Color.FromArgb(143, 135, 194);
+    static Color Fl = Color.FromArgb(36, 36, 42), Hov = Color.FromArgb(52, 52, 60), Tx = Color.FromArgb(242, 242, 245), Sub = Color.FromArgb(154, 154, 165), Aks = Color.FromArgb(255, 107, 74);
     [System.Runtime.InteropServices.DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr h, int a, ref int v, int s);
-    public MorkMeny() : base(new MorkFarger()) { RoundedEdges = false; }
+    class Farger : ProfessionalColorTable {
+        static Color Fl = Color.FromArgb(36, 36, 42), Hov = Color.FromArgb(52, 52, 60);
+        public override Color ToolStripDropDownBackground { get { return Fl; } }
+        public override Color ImageMarginGradientBegin { get { return Fl; } }
+        public override Color ImageMarginGradientMiddle { get { return Fl; } }
+        public override Color ImageMarginGradientEnd { get { return Fl; } }
+        public override Color MenuBorder { get { return Fl; } }
+        public override Color MenuItemBorder { get { return Color.Transparent; } }
+        public override Color MenuItemSelected { get { return Hov; } }
+        public override Color SeparatorDark { get { return Hov; } }
+        public override Color SeparatorLight { get { return Hov; } }
+    }
+    public MorkMeny() : base(new Farger()) { RoundedEdges = false; }
     public static void Rund(ToolStripDropDown m) { int v = 2; try { DwmSetWindowAttribute(m.Handle, 33, ref v, 4); } catch { } }   // Windows 11: avrundede hjørner
     protected override void OnRenderToolStripBackground(ToolStripRenderEventArgs e) { e.Graphics.Clear(Fl); }
-    protected override void OnRenderToolStripBorder(ToolStripRenderEventArgs e) { using (Pen p = new Pen(Kant)) e.Graphics.DrawRectangle(p, 0, 0, e.AffectedBounds.Width - 1, e.AffectedBounds.Height - 1); }
+    protected override void OnRenderToolStripBorder(ToolStripRenderEventArgs e) { }
+    protected override void OnRenderImageMargin(ToolStripRenderEventArgs e) { using (var b = new SolidBrush(Fl)) e.Graphics.FillRectangle(b, e.AffectedBounds); }
     protected override void OnRenderMenuItemBackground(ToolStripItemRenderEventArgs e) {
         if (!e.Item.Selected || !e.Item.Enabled) return;
         e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
         using (var p = new System.Drawing.Drawing2D.GraphicsPath()) {
-            Rectangle r = new Rectangle(4, 1, e.Item.Width - 8, e.Item.Height - 2); int d = 10;
+            Rectangle r = new Rectangle(4, 1, e.Item.Width - 8, e.Item.Height - 2); int d = 12;
             p.AddArc(r.X, r.Y, d, d, 180, 90); p.AddArc(r.Right - d, r.Y, d, d, 270, 90); p.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90); p.AddArc(r.X, r.Bottom - d, d, d, 90, 90); p.CloseFigure();
-            using (var b = new SolidBrush(Mark)) e.Graphics.FillPath(b, p);
+            using (var b = new SolidBrush(Hov)) e.Graphics.FillPath(b, p);
         }
     }
+    protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e) { e.TextColor = e.Item.Enabled ? Tx : Sub; base.OnRenderItemText(e); }
     protected override void OnRenderItemCheck(ToolStripItemImageRenderEventArgs e) {
         e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-        Rectangle r = e.ImageRectangle; float x = r.X + r.Width / 2f - 5, y = r.Y + r.Height / 2f;
-        using (Pen p = new Pen(Aks, 2f)) { p.StartCap = System.Drawing.Drawing2D.LineCap.Round; p.EndCap = System.Drawing.Drawing2D.LineCap.Round; p.LineJoin = System.Drawing.Drawing2D.LineJoin.Round; e.Graphics.DrawLines(p, new PointF[] { new PointF(x, y), new PointF(x + 3.5f, y + 3.5f), new PointF(x + 10, y - 4) }); }
+        Rectangle r = e.ImageRectangle; float cx = r.X + r.Width / 2f, cy = r.Y + r.Height / 2f;
+        using (Pen p = new Pen(Aks, 2f)) { p.StartCap = System.Drawing.Drawing2D.LineCap.Round; p.EndCap = System.Drawing.Drawing2D.LineCap.Round; p.LineJoin = System.Drawing.Drawing2D.LineJoin.Round; e.Graphics.DrawLines(p, new PointF[] { new PointF(cx - 4.5f, cy + 0.2f), new PointF(cx - 1.5f, cy + 3.2f), new PointF(cx + 4.5f, cy - 3.2f) }); }
     }
-    protected override void OnRenderSeparator(ToolStripSeparatorRenderEventArgs e) { using (Pen p = new Pen(Kant)) e.Graphics.DrawLine(p, 8, e.Item.Height / 2, e.Item.Width - 8, e.Item.Height / 2); }
-    protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e) { e.TextColor = e.Item.Enabled ? Color.FromArgb(236, 235, 243) : Color.FromArgb(120, 117, 140); base.OnRenderItemText(e); }
+    protected override void OnRenderSeparator(ToolStripSeparatorRenderEventArgs e) { using (Pen p = new Pen(Hov)) e.Graphics.DrawLine(p, 10, e.Item.Height / 2, e.Item.Width - 10, e.Item.Height / 2); }
 }
 // Lite skrivefelt-vindu ved bindersen: tar fokus (i motsetning til de andre), vises ikke i Alt-Tab.
 public class InnVindu : Form {
@@ -1543,11 +1532,11 @@ $delKnapp = New-Object Windows.Forms.ToolStripMenuItem('Del utklipp med Claude')
 $delKnapp.Add_CheckedChanged({ $script:delKlipp = $delKnapp.Checked; try { if ($script:delKlipp) { New-Item -ItemType File -Force $script:delFil | Out-Null } else { Remove-Item $script:delFil -ErrorAction SilentlyContinue } } catch {} })
 $musKnapp = New-Object Windows.Forms.ToolStripMenuItem('Musefølger'); $musKnapp.CheckOnClick = $true; $musKnapp.Checked = $script:musPå
 $musKnapp.Add_CheckedChanged({ $script:musPå = $musKnapp.Checked; try { if ($script:musPå) { Remove-Item $script:musFil -ErrorAction SilentlyContinue } else { New-Item -ItemType File -Force $script:musFil | Out-Null } } catch {} })
-$apneKnapp.Font = New-Object Drawing.Font($Familie, 9.5, [Drawing.FontStyle]::Bold)
+$apneKnapp.Font = New-Object Drawing.Font("Segoe UI", [single]9.75, [Drawing.FontStyle]::Bold)
 foreach ($mi in @($apneKnapp, '-', $musKnapp, $delKnapp, $tomKnapp, '-', $pauseKnapp, $stoppKnapp, $glemKnapp, '-')) { if ($mi -eq '-') { [void]$meny.Items.Add((New-Object Windows.Forms.ToolStripSeparator)) } else { [void]$meny.Items.Add($mi) } }
 [void]$meny.Items.Add('Avslutt Bindy', $null, { $tray.Visible = $false; Stopp-Veiledning $null; $form.Hide(); [Windows.Forms.Application]::Exit() })
-foreach ($it in $meny.Items) { if ($it -is [Windows.Forms.ToolStripMenuItem]) { $it.Padding = New-Object Windows.Forms.Padding(2, 5, 2, 5) } }
-$meny.Renderer = New-Object MorkMeny; $meny.Add_Opening({ param($s) [MorkMeny]::Rund($s) }); $meny.BackColor = $cFlate; $meny.ForeColor = $cTekst; $meny.Font = New-Object Drawing.Font($Familie, 9.5); $meny.ShowImageMargin = $false; $meny.ShowCheckMargin = $true
+foreach ($it in $meny.Items) { if ($it -is [Windows.Forms.ToolStripMenuItem]) { $it.Padding = New-Object Windows.Forms.Padding(0, 3, 0, 3) } }
+$meny.Renderer = New-Object MorkMeny; $meny.Add_Opening({ param($s) [MorkMeny]::Rund($s) }); $meny.BackColor = [Drawing.Color]::FromArgb(36, 36, 42); $meny.ForeColor = [Drawing.Color]::FromArgb(242, 242, 245); $meny.Font = New-Object Drawing.Font("Segoe UI", [single]9.75); $meny.Padding = New-Object Windows.Forms.Padding(0, 5, 0, 5); $meny.ShowImageMargin = $false; $meny.ShowCheckMargin = $true
 $tray.ContextMenuStrip = $meny
 $tray.Add_DoubleClick({ $script:fokusNår = $true; Sett-Modus 'full'; Puls })
 $tray.Add_MouseClick({ param($s, $e) if ($e.Button -eq 'Left') { Sett-Pause (-not $script:pause) } })   # venstreklikk på ikonet = pause/fortsett
