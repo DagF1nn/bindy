@@ -27,6 +27,12 @@ Testing the real installation needs administrator rights and changes the machine
 
 User-visible text is written in English in the code and wrapped as `(L 'English text')`. The Norwegian translation lives in the `$script:NO` dictionary at the top of `src/bindy.ps1` (English text as the key). Add a new string in both places. Texts sent to Claude are English and end with a "Reply in …" instruction taken from the language setting. Note: C# class names in `Add-Type` must be ASCII.
 
+## The MCP server
+
+`src/bindy.ps1` has a small MCP server (Streamable HTTP, JSON-RPC over POST, stateless) in the block "MCP: Claude Code kan bruke Bindy som verktøy". A C# class (`McpServer`, `McpGuard`) does the network part (loopback only, Host/Origin/token/size checks) and puts requests in a queue; PowerShell reads the queue on the UI thread (`Mcp-Behandle`, called from the main clock) so all UI and capture happens there. Tools: `bindy_status`, `bindy_se`, `bindy_pek`, `bindy_veiled` (see `Mcp-Rpc`). Approval is `Mcp-Spør` (a non-activating window, one click, 30 s timeout).
+
+Rules for changes: everything in a request is untrusted (validate types, lengths and numbers, and add a case to `-Sjekk`); never add a tool that clicks, types or pastes; never write screenshots to disk; the block list must be checked before asking and again when capturing; keep the log to time, tool, machine and outcome.
+
 ## Letting Claude Code start a guidance (deprecated: use the MCP tool `bindy_veiled`)
 
 Prefer the MCP tool `bindy_veiled`, which asks you first (see SECURITY.md). The file route below is kept for one version. With "Let Claude Code start guidance" on in Settings, a program (typically Claude Code in a terminal) starts guidance by writing the goal, plus any useful context, to `%LOCALAPPDATA%\Bindy\bindy-start.txt` (UTF-8, max 3000 characters):

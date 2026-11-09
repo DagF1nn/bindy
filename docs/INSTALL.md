@@ -125,3 +125,16 @@ powershell -ExecutionPolicy Bypass -File .\scripts\uninstall.ps1
 ```
 
 The script stops Bindy and removes `C:\Program Files\Bindy`, the certificates, the startup entry, the Start menu shortcut and the files Bindy itself has made in `%LOCALAPPDATA%\Bindy` (unknown files there are left alone, and you are told).
+
+## Optional: let Claude Code use Bindy (MCP)
+
+Off by default. It lets a Claude Code session on **this PC** use three tools: `bindy_se` (screenshot), `bindy_pek` (frame and pointer) and `bindy_veiled` (start a guidance), plus `bindy_status`. Each screenshot and each guidance needs one click from you.
+
+1. Install and start Bindy as above, then open the tray menu, **Settings…**, and turn on **Let Claude Code use Bindy (MCP)**.
+2. Tray menu, **Claude Code connection (MCP)…** shows a command like this (with your own token). Press Ctrl+C in the box and run it in a normal terminal:
+   ```powershell
+   claude mcp add --transport http bindy http://127.0.0.1:47831/mcp --header "Authorization: Bearer <token>" -s user
+   ```
+3. Check with `claude mcp list` (it should say Connected), then start a **new** Claude Code session and ask it to look at your screen.
+
+Notes: Bindy only listens on `127.0.0.1` (this PC), never on the network. **New MCP token** in the tray menu replaces the token (then run `claude mcp remove bindy -s user` and add it again). Turning the setting off stops the server. Read the MCP parts of [SECURITY.md](SECURITY.md) first.
