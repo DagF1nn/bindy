@@ -986,13 +986,11 @@ public static class McpGuard {
         for (int i = 0; i < expected.Length; i++) diff |= expected[i] ^ (i < g.Length ? g[i] : 0);
         return diff == 0 && expected.Length > 0;
     }
-    // "pc" for loopback, "server" for the one allowed remote address, otherwise null (refused).
-    public static string MachineOf(IPAddress ip, string remoteIp) {
-        if (ip == null) return null;
+    // Only the local machine is let in.
+    public static bool IsLocal(IPAddress ip) {
+        if (ip == null) return false;
         if (ip.IsIPv4MappedToIPv6) ip = ip.MapToIPv4();
-        if (IPAddress.IsLoopback(ip)) return "pc";
-        if (!string.IsNullOrEmpty(remoteIp) && ip.ToString() == remoteIp) return "server";
-        return null;
+        return IPAddress.IsLoopback(ip);
     }
     public static bool HostOk(string host, int port, string[] ips) {
         if (host == null) return false;
@@ -1002,12 +1000,12 @@ public static class McpGuard {
 }
 public class McpServer {
     public readonly ConcurrentQueue<McpItem> Queue = new ConcurrentQueue<McpItem>();
-    HttpListener l; byte[] token; int port; string[] ips; string remoteIp; int busy;
-    // tsIp / remoteIp: null = only local. Returns "" or the error text.
-    public string Start(int port, byte[] tokenAscii, string tsIp, string remoteIp) {
+    HttpListener l; byte[] token; int port; string[] ips; int busy;
+    // Returns "" or the error text.
+    public string Start(int port, byte[] tokenAscii) {
         try {
-            this.port = port; this.token = tokenAscii; this.remoteIp = remoteIp;
-            ips = string.IsNullOrEmpty(tsIp) ? new string[] { "127.0.0.1" } : new string[] { "127.0.0.1", tsIp };
+            this.port = port; this.token = tokenAscii;
+            ips = new string[] { "127.0.0.1" };
             l = new HttpListener();
             foreach (string a in ips) l.Prefixes.Add("http://" + a + ":" + port + "/");
             l.Start();
@@ -1035,8 +1033,7 @@ public class McpServer {
         HttpListenerContext c = (HttpListenerContext)o;
         try {
             HttpListenerRequest rq = c.Request;
-            string m = McpGuard.MachineOf(rq.RemoteEndPoint == null ? null : rq.RemoteEndPoint.Address, remoteIp);
-            if (m == null) { Send(c, 403, ""); return; }
+            if (!McpGuard.IsLocal(rq.RemoteEndPoint == null ? null : rq.RemoteEndPoint.Address)) { Send(c, 403, ""); return; }
             if (!McpGuard.HostOk(rq.Headers["Host"], port, ips)) { Send(c, 403, ""); return; }
             if (rq.Headers["Origin"] != null) { Send(c, 403, ""); return; }   // browsers send Origin: DNS rebinding and web pages are refused
             if (rq.Url.AbsolutePath != "/mcp") { Send(c, 404, ""); return; }
@@ -1052,7 +1049,7 @@ public class McpServer {
                 byte[] buf = new byte[n]; int got = 0;
                 while (got < n) { int r = rq.InputStream.Read(buf, got, (int)n - got); if (r <= 0) break; got += r; }
                 if (got != n) { Send(c, 400, ""); return; }
-                McpItem it = new McpItem(); it.Machine = m; it.Body = new UTF8Encoding(false, true).GetString(buf);
+                McpItem it = new McpItem(); it.Machine = "pc"; it.Body = new UTF8Encoding(false, true).GetString(buf);
                 Queue.Enqueue(it);
                 if (!it.Done.Wait(60000)) { it.Abandoned = true; Send(c, 504, ""); return; }
                 Send(c, it.Status, it.Reply);
@@ -1084,7 +1081,7 @@ function Mcp-Sett {   # starter eller stopper serveren etter innstillingen
     if (-not $script:TillatMcp) { return }
     try {
         $s = New-Object McpServer
-        $fe = $s.Start($script:McpPort, [Text.Encoding]::ASCII.GetBytes((Mcp-LesToken $false)), $null, $null)
+        $fe = $s.Start($script:McpPort, [Text.Encoding]::ASCII.GetBytes((Mcp-LesToken $false)))
         if ($fe) { $tray.ShowBalloonTip(7000, 'Bindy', (L 'The MCP server did not start ({0}). Run scripts\install.ps1 as administrator to open the port.' $fe), 'Warning'); return }
         $script:mcp = $s
     } catch { $tray.ShowBalloonTip(5000, 'Bindy', (L 'Error: {0}' $_), 'Error') }
@@ -1144,10 +1141,9 @@ if ($Sjekk) {
     foreach ($t in @(@('Bearer abc123', $true), @('bearer abc123', $true), @('Bearer abc124', $false), @('Bearer abc12', $false), @('Bearer abc1234', $false), @('abc123', $false), @('', $false), @($null, $false))) {
         if ([McpGuard]::TokenOk($t[0], $tk) -ne $t[1]) { Write-Host "FEIL: McpGuard.TokenOk '$($t[0])'"; $fe++ }
     }
-    foreach ($t in @(@('127.0.0.1', 'pc'), @('::1', 'pc'), @('::ffff:127.0.0.1', 'pc'), @('100.x.x.1', 'server'), @('100.64.0.9', $null), @('192.168.1.5', $null))) {
-        if ([McpGuard]::MachineOf([Net.IPAddress]::Parse($t[0]), '100.x.x.1') -ne $t[1]) { Write-Host "FEIL: McpGuard.MachineOf $($t[0])"; $fe++ }
+    foreach ($t in @(@('127.0.0.1', $true), @('::1', $true), @('::ffff:127.0.0.1', $true), @('100.64.0.9', $false), @('192.168.1.5', $false))) {
+        if ([McpGuard]::IsLocal([Net.IPAddress]::Parse($t[0])) -ne $t[1]) { Write-Host "FEIL: McpGuard.IsLocal $($t[0])"; $fe++ }
     }
-    if ([McpGuard]::MachineOf([Net.IPAddress]::Parse('100.x.x.1'), $null)) { Write-Host 'FEIL: MachineOf uten tillatt fjernadresse'; $fe++ }
     if (-not [McpGuard]::HostOk('127.0.0.1:47831', 47831, [string[]]@('127.0.0.1')) -or [McpGuard]::HostOk('evil.com:47831', 47831, [string[]]@('127.0.0.1')) -or [McpGuard]::HostOk($null, 1, [string[]]@('127.0.0.1'))) { Write-Host 'FEIL: McpGuard.HostOk'; $fe++ }
     $rpc = { param($b) Mcp-Rpc $b 'pc' }
     $r = & $rpc '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}'
@@ -1167,7 +1163,7 @@ if ($Sjekk) {
         if ((($r.body | ConvertFrom-Json).error.code) -ne $t[1]) { Write-Host "FEIL: MCP '$($t[0])' ga $($r.body)"; $fe++ }
     }
     $srv = New-Object McpServer; $pt = 49152 + (Get-Random -Maximum 2000); $tok = 'testtoken'
-    $bind = $srv.Start($pt, [Text.Encoding]::ASCII.GetBytes($tok), $null, $null)
+    $bind = $srv.Start($pt, [Text.Encoding]::ASCII.GetBytes($tok))
     if ($bind) { Write-Host "MCP-serveren ble ikke startet i selvsjekken ($bind): nettverkstestene hoppes over (trenger urlacl, se install.ps1)" }
     else {
         Add-Type -AssemblyName System.Net.Http; $script:mcp = $srv; $hc = New-Object Net.Http.HttpClient
