@@ -1152,7 +1152,7 @@ function Mcp-Lagre($f) {
 function Mcp-Svar([bool]$feil, [string]$tekst) { @{ content = @(@{ type = 'text'; text = $tekst }); isError = $feil } }
 # Spør brukeren (ett klikk per bilde). Returnerer 'ja', 'nei' eller 'tid'. Tastatur godkjenner ikke: vinduet tar aldri fokus og knappene aktiveres først etter 0,7 s.
 function Mcp-Spør([string]$tittel, [string]$grunn, [string]$jaTekst) {
-    $nå = Get-Date; $script:mcpSpurt = @($script:mcpSpurt | Where-Object { ($nå - $_).TotalMinutes -lt 10 })
+    $nå = Get-Date; $script:mcpSpurt = @($script:mcpSpurt | Where-Object { $_ -is [DateTime] -and ($nå - $_).TotalMinutes -lt 10 })
     if ($script:mcpSpurt.Count -ge 3 -or ($script:mcpSistNei -and ($nå - $script:mcpSistNei).TotalSeconds -lt 60)) { return 'ofte' }   # maks 3 spørsmål per 10 min, og ikke rett etter et nei
     $script:mcpSpurt += $nå
     $f = New-Object KlippVindu
@@ -1329,7 +1329,7 @@ function Mcp-Behandle {   # kalles fra klokka: tar forespørslene som venter
         $it = $null
         while ($script:mcp -and $script:mcp.Queue.TryDequeue([ref]$it)) {
             if ($it.Abandoned) { continue }
-            try { $r = Mcp-Rpc $it.Body $it.Machine; $it.Status = $r.status; $it.Reply = $r.body } catch { $it.Status = 500; $it.Reply = '' }
+            try { $r = Mcp-Rpc $it.Body $it.Machine; $it.Status = $r.status; $it.Reply = $r.body } catch { $it.Status = 500; $it.Reply = ''; try { Add-Content (Join-Path $Mappe 'bindy-feil.log') "$(Get-Date -Format s) mcp: $($_.Exception.Message)" } catch {} }
             $it.Done.Set()
         }
     } finally { $script:mcpIGang = $false }
@@ -1396,6 +1396,7 @@ if ($Sjekk) {
     $script:jobb = 1; if (Mus-Tips) { Write-Host 'FEIL: tips mens Bindy tenker'; $fe++ }; $script:jobb = $null
     $script:vei = $false; if (Mus-Tips) { Write-Host 'FEIL: tips uten veiledning'; $fe++ }
     $script:vei, $script:veiSteg, $script:veiSist, $script:jobb, $script:pause = $g1
+    $script:mcpSpurt = $null; $nå = Get-Date; try { $x = @($script:mcpSpurt | Where-Object { $_ -is [DateTime] -and ($nå - $_).TotalMinutes -lt 10 }); if ($x.Count) { throw 'x' } } catch { Write-Host 'FEIL: spørsmålsgrensen kræsjer med tom liste'; $fe++ }
     $srv = New-Object McpServer; $pt =49152 + (Get-Random -Maximum 2000); $tok = 'testtoken'
     $bind = $srv.Start($pt, [Text.Encoding]::ASCII.GetBytes($tok))
     if ($bind) { Write-Host "MCP-serveren ble ikke startet i selvsjekken ($bind): nettverkstestene hoppes over (er porten i bruk?)" }
