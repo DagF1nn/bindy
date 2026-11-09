@@ -702,23 +702,25 @@ function Fang-Alle {
 function Fang-Etter([string]$modus) {
     if ($modus -eq 'alle') { return Fang-Alle }
     $f = Fang-Vindu
-    if ($f.ok -and ($f.vB -lt 700 -or $f.vH -lt 420)) {
+    if (-not $f.ok -or $f.vB -lt 700 -or $f.vH -lt 420) {   # vinduet er lite, eller finnes ikke (Startmenyen, oppgavelinjen): ta alle skjermer. Fang-Alle nekter selv hvis et sperret vindu er synlig.
         $a = Fang-Alle
-        if ($a.ok) { $f.bitmap.Dispose(); $a.liten = $true; return $a }
+        if ($a.ok) { if ($f.ok) { $f.bitmap.Dispose() }; $a.liten = $true; return $a }
     }
     return $f
 }
 
 # Liten «signatur» av aktivt vindu: tittel + 32x20 gråtoner. Brukes bare til å se om skjermen har endret seg, lagres aldri.
 function Ta-Signatur {
-    $h = Finn-Mål
-    if ($h -eq [IntPtr]::Zero) { return $null }
-    $tittel = Vindustittel $h
-    if (Sperre-Grunn $h $tittel) { return @{ blokkert = $true; tittel = $tittel } }
-    $r = New-Object Vin+RECT
-    if (-not [Vin]::GetWindowRect($h, [ref]$r)) { return $null }
+    $h = Finn-Mål; $tittel = ''; $r = New-Object Vin+RECT; $ok = $false
+    if ($h -ne [IntPtr]::Zero) {
+        $tittel = Vindustittel $h
+        if (Sperre-Grunn $h $tittel) { return @{ blokkert = $true; tittel = $tittel } }
+        $ok = [Vin]::GetWindowRect($h, [ref]$r) -and ($r.R - $r.L) -ge 50 -and ($r.B - $r.T) -ge 50
+    }
+    if (-not $ok) {   # Startmenyen, oppgavelinjen og lignende er for små eller uten tittel: bruk hele skjermen (sperrelista sjekkes uansett når bildet tas)
+        $vs = [Windows.Forms.SystemInformation]::VirtualScreen; $r.L = $vs.Left; $r.T = $vs.Top; $r.R = $vs.Right; $r.B = $vs.Bottom; $tittel = 'screen'
+    }
     $b = $r.R - $r.L; $hø = $r.B - $r.T
-    if ($b -lt 50 -or $hø -lt 50) { return $null }
     $full = New-Object Drawing.Bitmap($b, $hø)
     $g = [Drawing.Graphics]::FromImage($full); $g.CopyFromScreen($r.L, $r.T, 0, 0, $full.Size); $g.Dispose()
     $liten = New-Object Drawing.Bitmap(32, 20)
