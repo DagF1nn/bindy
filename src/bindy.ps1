@@ -49,7 +49,7 @@ $script:musFade = 0; $script:musSist = ''
 $script:InnstFil = Join-Path $Mappe 'bindy-settings.json'
 $script:StandardTaster = [ordered]@{ ask = 'Ctrl+Alt+H'; askNoScreen = 'Ctrl+Alt+J'; pause = 'Ctrl+Alt+P'; nextStep = 'Ctrl+Alt+N' }
 $script:TastId = [ordered]@{ ask = 1; askNoScreen = 2; pause = 3; nextStep = 4 }
-$script:TillatStartfil = $false; $script:TillatMcp = $false; $script:TillatMcpFjern = $false; $script:McpPort = 47831; $script:Språk = 'en'; $script:Taster = [ordered]@{}; foreach ($k in $script:StandardTaster.Keys) { $script:Taster[$k] = $script:StandardTaster[$k] }
+$script:TillatStartfil = $false; $script:TillatMcp = $false; $script:McpPort = 47831; $script:Språk = 'en'; $script:Taster = [ordered]@{}; foreach ($k in $script:StandardTaster.Keys) { $script:Taster[$k] = $script:StandardTaster[$k] }
 $TastRegex = '^(?:(?:Ctrl|Alt|Shift|Win)\+){1,4}(?:[A-Z0-9]|F(?:[1-9]|1[0-9]|2[0-4]))\z'   # filen kan skrives av annen kode: bare gyldige kombinasjoner godtas
 function Les-Innst {
     try {
@@ -58,13 +58,12 @@ function Les-Innst {
         if ($j.language -in 'en', 'no') { $script:Språk = [string]$j.language }
         if ($j.allowStartFile -is [bool]) { $script:TillatStartfil = $j.allowStartFile }
         if ($j.allowMcp -is [bool]) { $script:TillatMcp = $j.allowMcp }
-        if ($j.allowMcpRemote -is [bool]) { $script:TillatMcpFjern = $j.allowMcpRemote }
         if (($j.mcpPort -is [int]) -and $j.mcpPort -ge 1024 -and $j.mcpPort -le 65535) { $script:McpPort = [int]$j.mcpPort }
         foreach ($k in @($script:StandardTaster.Keys)) { $v = [string]$j.hotkeys.$k; if ($v -cmatch $TastRegex) { $script:Taster[$k] = $v } }
     } catch {}
 }
 function Lagre-Innst {
-    try { $o = [ordered]@{ language = $script:Språk; allowStartFile = $script:TillatStartfil; allowMcp = $script:TillatMcp; allowMcpRemote = $script:TillatMcpFjern; mcpPort = $script:McpPort; hotkeys = $script:Taster }; [IO.File]::WriteAllText($script:InnstFil, ($o | ConvertTo-Json -Depth 3), (New-Object Text.UTF8Encoding($false))) } catch {}
+    try { $o = [ordered]@{ language = $script:Språk; allowStartFile = $script:TillatStartfil; allowMcp = $script:TillatMcp; mcpPort = $script:McpPort; hotkeys = $script:Taster }; [IO.File]::WriteAllText($script:InnstFil, ($o | ConvertTo-Json -Depth 3), (New-Object Text.UTF8Encoding($false))) } catch {}
 }
 Les-Innst
 # Tastekombinasjon som tekst («Ctrl+Alt+H») til (modifikatorer, tastekode) for RegisterHotKey. 0x4000 = ikke gjenta.
@@ -76,10 +75,6 @@ function Tast-Tolk([string]$k) {
     return @($mod, $vk)
 }
 $script:NO = @{
-    'Allow from home server (Tailscale)' = 'Tillat fra hjemmeserveren (Tailscale)'
-    'Could not open the Tailscale address ({0}). Run scripts\install.ps1 as administrator.' = 'Kunne ikke Ã¥pne Tailscale-adressen ({0}). KjÃ¸r scripts\install.ps1 som administrator.'
-    'From the home server:' = 'Fra hjemmeserveren:'
-    'The home server is allowed, but the Tailscale address is not open (yet).' = 'Hjemmeserveren er tillatt, men Tailscale-adressen er ikke Ã¥pen (ennÃ¥).'
     'The MCP server did not start ({0}). Run scripts\install.ps1 as administrator to open the port.' = 'MCP-serveren startet ikke ({0}). Kjør scripts\install.ps1 som administrator for å åpne porten.'
     'Turn on "Let Claude Code use Bindy (MCP)" in Settings first.' = 'Slå på «La Claude Code bruke Bindy (MCP)» i Settings først.'
     'Ctrl+C copies this text. Anyone with the token can ask Bindy for status.' = 'Ctrl+C kopierer teksten. Den som har tokenet kan spørre Bindy om status.'
@@ -1084,38 +1079,22 @@ function Mcp-Logg([string]$verktøy, [string]$maskin, [string]$utfall) {   # bar
     try { $f = Join-Path $Mappe 'bindy-sist.log'; if ((Test-Path $f) -and (Get-Item $f).Length -gt 100000) { Remove-Item $f }; Add-Content $f "$(Get-Date -Format s) $maskin $verktøy $utfall" } catch {}
 }
 function Mcp-Stopp { if ($script:mcp) { $script:mcp.Stop(); $script:mcp = $null } }
-$script:McpServerIp = '100.x.x.1'   # snarvei: fast Tailscale-adresse for hjemmeserver; ny maskin = endre her og i install.ps1
-$script:mcpTs = $null; $script:mcpTsFeil = $false
-function Mcp-TsIp {   # PC-ens Tailscale-adresse (100.64.0.0/10 pÃ¥ grensesnittet Â«TailscaleÂ»), eller $null
-    try { foreach ($n in [Net.NetworkInformation.NetworkInterface]::GetAllNetworkInterfaces()) { if ($n.Name -eq 'Tailscale' -and $n.OperationalStatus -eq 'Up') { foreach ($a in $n.GetIPProperties().UnicastAddresses) { $t = $a.Address.ToString(); if ($t -cmatch '^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\.\d{1,3}\.\d{1,3}\z') { return $t } } } } } catch {}
-    return $null
-}
-function Mcp-Sett([bool]$stille = $false) {   # starter eller stopper serveren etter innstillingene
-    Mcp-Stopp; $script:mcpTs = $null; if (-not $stille) { $script:mcpTsFeil = $false }
+function Mcp-Sett {   # starter eller stopper serveren etter innstillingen
+    Mcp-Stopp
     if (-not $script:TillatMcp) { return }
     try {
-        $tok = [Text.Encoding]::ASCII.GetBytes((Mcp-LesToken $false))
-        $ts = $null; if ($script:TillatMcpFjern) { $ts = Mcp-TsIp }
-        $sv = New-Object McpServer
-        $fe = $sv.Start($script:McpPort, $tok, $ts, $(if ($ts) { $script:McpServerIp } else { '' }))
-        if ($fe -and $ts) {   # Tailscale-adressen kunne ikke Ã¥pnes (urlacl mangler?): bare lokalt, og ikke prÃ¸v pÃ¥ nytt av seg selv
-            $sv.Stop(); $script:mcpTsFeil = $true; $ts = $null
-            if (-not $stille) { $tray.ShowBalloonTip(7000, 'Bindy', (L 'Could not open the Tailscale address ({0}). Run scripts\install.ps1 as administrator.' $fe), 'Warning') }
-            $sv = New-Object McpServer; $fe = $sv.Start($script:McpPort, $tok, $null, '')
-        }
+        $s = New-Object McpServer
+        $fe = $s.Start($script:McpPort, [Text.Encoding]::ASCII.GetBytes((Mcp-LesToken $false)), $null, $null)
         if ($fe) { $tray.ShowBalloonTip(7000, 'Bindy', (L 'The MCP server did not start ({0}). Run scripts\install.ps1 as administrator to open the port.' $fe), 'Warning'); return }
-        $script:mcp = $sv; $script:mcpTs = $ts
+        $script:mcp = $s
     } catch { $tray.ShowBalloonTip(5000, 'Bindy', (L 'Error: {0}' $_), 'Error') }
 }
 function Mcp-Vis {
     if (-not $script:TillatMcp) { [void][Windows.Forms.MessageBox]::Show((L 'Turn on "Let Claude Code use Bindy (MCP)" in Settings first.'), 'Bindy'); return }
     try { $t = Mcp-LesToken $false } catch { return }
-    $k = { param($ip) "claude mcp add --transport http bindy http://${ip}:$($script:McpPort)/mcp --header `"Authorization: Bearer $t`" -s user" }
-    $tekst = (& $k '127.0.0.1')
-    if ($script:mcpTs) { $tekst += "`n`n" + (L 'From the home server:') + "`n" + (& $k $script:mcpTs) }
-    elseif ($script:TillatMcpFjern) { $tekst += "`n`n" + (L 'The home server is allowed, but the Tailscale address is not open (yet).') }
-    [void][Windows.Forms.MessageBox]::Show($tekst + "`n`n" + (L 'Ctrl+C copies this text. Anyone with the token can ask Bindy for status.'), 'Bindy')
-}function Mcp-NyttToken {
+    [void][Windows.Forms.MessageBox]::Show("claude mcp add --transport http bindy http://127.0.0.1:$($script:McpPort)/mcp --header `"Authorization: Bearer $t`" -s user`n`n" + (L 'Ctrl+C copies this text. Anyone with the token can ask Bindy for status.'), 'Bindy')
+}
+function Mcp-NyttToken {
     if (-not $script:TillatMcp) { return }
     try { [void](Mcp-LesToken $true); Mcp-Sett; $tray.ShowBalloonTip(4000, 'Bindy', (L 'New MCP token made. The old one no longer works.'), 'Info') } catch {}
 }
@@ -1205,28 +1184,8 @@ if ($Sjekk) {
             $kode = & $post $t[0] $t[1] $t[2] $t[3] $t[4]
             if ($kode -ne $t[5]) { Write-Host "FEIL: MCP HTTP $($t[0]) auth='$($t[1])' ga $kode, skulle ha $($t[5])"; $fe++ }
         }
-        $q = New-Object Net.Http.HttpRequestMessage([Net.Http.HttpMethod]'POST', "http://127.0.0.1:$pt/mcp"); [void]$q.Headers.TryAddWithoutValidation('Authorization', "Bearer $tok"); $q.Headers.Host = 'evil.example'
-        $q.Content = New-Object Net.Http.StringContent($ping, [Text.Encoding]::UTF8, 'application/json'); $t = $hc.SendAsync($q); $til = [DateTime]::Now.AddSeconds(5); while (-not $t.IsCompleted -and [DateTime]::Now -lt $til) { Start-Sleep -Milliseconds 15 }
-        if ($t.IsFaulted -or [int]$t.Result.StatusCode -ne 403) { Write-Host 'FEIL: MCP med feil Host-header skulle gi 403' ; $fe++ }
         $hc.Dispose(); Mcp-Stopp
-    # --- MCP over Tailscale: PC-en selv er ikke Â«hjemmeserverÂ», sÃ¥ den skal avvises (403); LAN-adressen lytter ikke (tilkobling nektes)
-    $tsa = Mcp-TsIp
-    if (-not $tsa) { Write-Host 'Ingen Tailscale-adresse funnet: Tailscale-testene hoppes over' }
-    else {
-        $srv = New-Object McpServer; $bind = $srv.Start($pt, [Text.Encoding]::ASCII.GetBytes($tok), $tsa, '100.x.x.1')
-        if ($bind) { Write-Host "MCP pÃ¥ Tailscale-adressen $tsa ble ikke startet i selvsjekken ($bind): trenger urlacl (install.ps1)" }
-        else {
-            $script:mcp = $srv; $hc = New-Object Net.Http.HttpClient
-            foreach ($t in @(@($tsa, 403), @($(([Net.NetworkInformation.NetworkInterface]::GetAllNetworkInterfaces() | Where-Object { $_.Name -ne 'Tailscale' -and $_.OperationalStatus -eq 'Up' } | ForEach-Object { $_.GetIPProperties().UnicastAddresses } | Where-Object { $_.Address.AddressFamily -eq 'InterNetwork' -and $_.Address.ToString() -match '^(192\.168|10\.|172\.(1[6-9]|2\d|3[01]))' } | Select-Object -First 1 | ForEach-Object { $_.Address.ToString() })), -1))) {
-                if (-not $t[0]) { continue }
-                $q = New-Object Net.Http.HttpRequestMessage([Net.Http.HttpMethod]'POST', "http://$($t[0]):$pt/mcp"); [void]$q.Headers.TryAddWithoutValidation('Authorization', "Bearer $tok")
-                $q.Content = New-Object Net.Http.StringContent($ping, [Text.Encoding]::UTF8, 'application/json'); $x = $hc.SendAsync($q); $til = [DateTime]::Now.AddSeconds(5); while (-not $x.IsCompleted -and [DateTime]::Now -lt $til) { Start-Sleep -Milliseconds 15 }
-                $kode = $(if ($x.IsFaulted -or -not $x.IsCompleted) { -1 } else { [int]$x.Result.StatusCode })
-                if ($kode -ne $t[1]) { Write-Host "FEIL: MCP mot $($t[0]) ga $kode, skulle ha $($t[1])"; $fe++ }
-            }
-            $hc.Dispose(); Mcp-Stopp
-        }
-    }    }
+    }
     $wa = New-Object Drawing.Rectangle(0, 0, 1920, 1080)
     foreach ($t in @(@(100, 100, 132, 132), @(1900, 100, 1828, 132), @(100, 1070, 132, 998), @(1900, 1070, 1828, 998))) {
         $m = Mus-Mål $t[0] $t[1] 40 40 $wa
@@ -2096,7 +2055,6 @@ function Vis-Innstillinger {
     [void](& $bryter (L 'Share clips with Claude') $script:delKlipp { param($snd, $ev) $delKnapp.Checked = $snd.Checked })
     [void](& $bryter (L 'Let Claude Code start guidance') $script:TillatStartfil { param($snd, $ev) $script:TillatStartfil = $snd.Checked; Lagre-Innst })
     [void](& $bryter (L 'Let Claude Code use Bindy (MCP)') $script:TillatMcp { param($snd, $ev) $script:TillatMcp = $snd.Checked; Lagre-Innst; Mcp-Sett })
-    [void](& $bryter (L 'Allow from home server (Tailscale)') $script:TillatMcpFjern { param($snd, $ev) $script:TillatMcpFjern = $snd.Checked; Lagre-Innst; Mcp-Sett })
     [void](& $bryter (L 'Start Bindy with Windows') (Autostart-På) { param($snd, $ev) Sett-Autostart $snd.Checked })
     $y = $script:yy + 8
     # --- Hurtigtaster
@@ -2232,7 +2190,6 @@ $klokke.Add_Tick({
     if ($script:tikk % 8 -eq 0 -and -not $script:pause) { Les-Utklipp }
     if ($script:tikk % 8 -eq 4 -and -not $script:jobb) { Sjekk-Startfil }
     if ($script:mcp) { Mcp-Behandle }
-    if ($script:mcp -and $script:TillatMcpFjern -and -not $script:mcpTs -and -not $script:mcpTsFeil -and $script:tikk % 250 -eq 7 -and (Mcp-TsIp)) { Mcp-Sett $true }   # Tailscale kom opp etter oppstart
     Klipp-Hover
     if ($script:kopiTil -and [DateTime]::Now -ge $script:kopiTil) { Kopi-Slutt }   # kopi-varselet forsvinner av seg selv
     $j = $script:jobb
