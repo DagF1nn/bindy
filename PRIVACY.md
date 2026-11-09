@@ -33,6 +33,8 @@ Everything is in `%LOCALAPPDATA%\Bindy\`:
 | `bindy-host-feil.log` | Errors from the launcher (`BindyStart.exe`), rare |
 | `bindy-start.txt` | Only exists for a moment: a request to start guidance, deleted as soon as Bindy reads it |
 | `bindy-del-utklipp` | Empty file: if it exists, sharing clips is on |
+| `bindy-mcp-token.bin` | The MCP token, encrypted with DPAPI for your Windows user (only exists if MCP has been turned on) |
+| `bindy-sist.log` | One line per MCP tool call: time, machine, tool, outcome. Never content or token. Cut at 100 kB |
 | `bindy-musefolger-av` | Empty file: if it exists, the mouse follower (paperclip by the mouse pointer) is switched off |
 
 **Developer mode:** running `bindy.ps1 -Sjekk` or `-Prov` by hand writes drawing test PNGs (`bindy-oy.png`, `bindy-peker.png`) to `%TEMP%`, and `-Prov` sends one screenshot. The installed `BindyStart.exe` cannot pass these flags.
