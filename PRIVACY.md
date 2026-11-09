@@ -11,6 +11,7 @@ Bindy collects nothing itself, has no account and no server. But it does send co
 | During guidance | A short note on whether you clicked **inside** or **outside** the marked target, or that no click was registered | Only yes/no, never coordinates or which app |
 | Always | What you type, and the latest questions and answers (max 6, forgotten after 10 min) | |
 | Always | The task note (`bindy-oppgave.md`, max 3000 characters), if it exists | Stored locally, see below |
+| **Only if you turn on MCP** and click Share | A screenshot (all screens max 2000 px, or the active window max 1280 px) plus the window title, returned to the Claude Code session that asked | One click per image. The session then sends it to Anthropic like anything else in its conversation. Not kept by Bindy |
 | **Only if you turn on "Share clips with Claude"** | The 6 latest copies, each max 200 characters | **Off by default** |
 
 What Anthropic does with the data is decided by your Claude account and Anthropic's own terms and privacy policy. Bindy cannot control that.
