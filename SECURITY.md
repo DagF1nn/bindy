@@ -27,6 +27,10 @@ This means:
 - Claude gets **no tools** (`--tools ""`: no files, no web, no command line) and reads no settings or hooks from folders (`--setting-sources ""`). Bindy only starts an **executable** `claude` (never `.cmd` or `.ps1`) and removes `NODE_OPTIONS` from its environment.
 - Bindy never pastes anything unless you press "Paste", and refuses to paste into password and banking windows.
 
+## Claude Code as a client (MCP, off by default)
+
+With **Let Claude Code use Bindy (MCP)** on in Settings, Bindy listens on `127.0.0.1:47831/mcp` (never `0.0.0.0`, LAN or Funnel). Every request must come from the local machine, have the right `Host`, **no** `Origin` header, `Content-Type: application/json`, at most 16 KB and `Authorization: Bearer <token>`. The token is 32 random bytes stored with DPAPI in `bindy-mcp-token.bin` and compared in constant time; **New MCP token** in the tray menu replaces it. One request at a time. In this version the only tool is `bindy_status` (running, paused, guiding; no screen content). The log `bindy-sist.log` holds only time, machine, tool and outcome. Any program running as you can ask DPAPI for the token, so it adds no protection against code already running as you.
+
 ## Known limitations
 
 - **The block list** for passwords and banking is title and process-name matching. It lets a lot through. It is not a guarantee.
