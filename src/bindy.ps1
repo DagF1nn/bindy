@@ -75,6 +75,7 @@ function Tast-Tolk([string]$k) {
     return @($mod, $vk)
 }
 $script:NO = @{
+    'Stuck? Press {0}' = 'Står du fast? Trykk {0}'
     'Claude Code wants Bindy to guide you (screenshots go to Claude)' = 'Claude Code vil at Bindy skal veilede deg (skjermbilder sendes til Claude)'
     'Start' = 'Start'
     'Claude Code wants to see {0}' = 'Claude Code vil se {0}'
@@ -981,6 +982,13 @@ function Mus-Mål([int]$cx, [int]$cy, [int]$b, [int]$h, $wa) {
     return @($x, $y)
 }
 
+# Tips ved musa når et steg har stått ubesvart en stund: «Står du fast? Trykk Ctrl+Alt+N». Vises ikke mens Bindy tenker.
+function Mus-Tips {
+    if (-not $script:vei -or $script:jobb -or $script:pause -or -not $script:veiSteg) { return '' }
+    if (([DateTime]::Now - $script:veiSist).TotalSeconds -lt 20) { return '' }
+    return (L 'Stuck? Press {0}' $script:Taster.nextStep)
+}
+
 # ---------------------------------------------------------------- MCP: Claude Code kan bruke Bindy som verktøy (Streamable HTTP, bare 127.0.0.1 i denne versjonen)
 # Av som standard (Settings). Serveren (C#) tar imot, sjekker kilde, Host, Origin, token og størrelse og legger forespørselen i en kø.
 # PowerShell leser køen på UI-tråden (klokka), så all UI og fangst skjer der. Se SECURITY.md.
@@ -1364,6 +1372,12 @@ if ($Sjekk) {
         if (-not $r.isError -or $r.content[0].text -notmatch $t[1]) { Write-Host "FEIL: bindy_veiled $($t[0].Substring(0, [Math]::Min(40, $t[0].Length))) ga '$($r.content[0].text)', skulle ha '$($t[1])'"; $fe++ }
     }
     $script:pause = $gammelPause
+    $g1 = @($script:vei, $script:veiSteg, $script:veiSist, $script:jobb, $script:pause); $script:vei = $true; $script:veiSteg = 'x'; $script:jobb = $null; $script:pause = $false
+    $script:veiSist = (Get-Date).AddSeconds(-10); if (Mus-Tips) { Write-Host 'FEIL: tips etter bare 10 s'; $fe++ }
+    $script:veiSist = (Get-Date).AddSeconds(-25); if ((Mus-Tips) -notlike "*$($script:Taster.nextStep)*") { Write-Host 'FEIL: tips etter 25 s skal nevne tasten'; $fe++ }
+    $script:jobb = 1; if (Mus-Tips) { Write-Host 'FEIL: tips mens Bindy tenker'; $fe++ }; $script:jobb = $null
+    $script:vei = $false; if (Mus-Tips) { Write-Host 'FEIL: tips uten veiledning'; $fe++ }
+    $script:vei, $script:veiSteg, $script:veiSist, $script:jobb, $script:pause = $g1
     $srv = New-Object McpServer; $pt =49152 + (Get-Random -Maximum 2000); $tok = 'testtoken'
     $bind = $srv.Start($pt, [Text.Encoding]::ASCII.GetBytes($tok))
     if ($bind) { Write-Host "MCP-serveren ble ikke startet i selvsjekken ($bind): nettverkstestene hoppes over (trenger urlacl, se install.ps1)" }
@@ -2092,7 +2106,7 @@ function Send-Sjekk($sig, [string]$modell = $ModellSjekk) {
     $stille = $script:stilleSjekk; $script:stilleSjekk = $false   # settes på nytt rett før kallet, så det aldri henger igjen
     if ($script:veiSjekk -ge $MaksSjekker) { Stopp-Veiledning (L 'Guidance stopped after {0} checks.' $MaksSjekker); return }
     $f = Fang-Etter $(if ($script:veiAlle) { 'alle' } else { 'vindu' })
-    if (-not $f.ok) { return }
+    if (-not $f.ok) { if ($script:nesteManuell) { Sett-Toast $f.grunn }; return }   # trykket du Neste steg, skal du få vite hvorfor det ikke gikk
     Bruk-Bilde $f
     if (-not $stille) { $script:veiSjekk++ }   # stille sjekker (uten klikk) teller ikke mot taket
     $script:veiKlikkTid = $null; $script:veiSist = Get-Date
@@ -2151,7 +2165,9 @@ function Neste-Steg {
     $sg = Ta-Signatur; if (-not $sg -or $sg.blokkert) { Sett-Toast (L 'Could not see the screen right now.'); return }
     $script:ståttNote = 'the user pressed «Next step»: count the step you gave last as done (or skip it) and give the NEXT step with MARKER and PEKER. Answer STATUS: GJORT, or FERDIG if the goal is reached. '
     $script:veiSjekk = [Math]::Max(0, $script:veiSjekk - 1); $script:veiHjelpt = $false
-    Send-Sjekk $sg $ModellSpør; $script:ståttNote = ''
+    $script:nesteManuell = $true
+    try { Send-Sjekk $sg $ModellSpør } finally { $script:nesteManuell = $false }
+    $script:ståttNote = ''
 }
 
 # ---------------------------------------------------------------- tray og hurtigtast
@@ -2421,6 +2437,7 @@ $klokke.Add_Tick({
         else { $script:kollapsTid = $null; Sett-Modus $(if ($script:vei) { 'pille' } else { 'skjult' }) }
     }
     if ($script:rammeTid -and [DateTime]::Now -gt $script:rammeTid) { Skjul-Ramme; Oppdater-Ikon }
+    if (-not $script:musPå -and $script:tikk % 8 -eq 2) { $tp = Mus-Tips; if ($tp -and -not $script:tipsToast) { $script:tipsToast = $true; Sett-Toast $tp } elseif (-not $tp) { $script:tipsToast = $false } }
 })
 $klokke.Start()
 Mcp-Sett
@@ -2445,12 +2462,12 @@ function Peker-Steg([double]$dt) {
 # Klokke 4 (16 ms): musefølgeren, en liten binders som glir etter musa i fast avstand. Flytter bare vinduet når den ikke er framme.
 # Mens Bindy tenker vises et laste-ikon og en kort tekst ved siden av. Utstikkeren på bindersen peker oppover.
 function Mus-Tekst {
-    if (-not $script:jobb) { return '' }
+    if (-not $script:jobb) { return (Mus-Tips) }
     if ($script:strømmer) { return (L 'Writing answer…') }
     return "$($script:tenkTekst)…"
 }
 $script:musMG = [Drawing.Graphics]::FromImage((New-Object Drawing.Bitmap(1, 1)))   # gjenbrukt for måling av tekstbredde
-function Tegn-Mus([string]$tekst, [int]$vinkel, [double]$ret, [double]$alfa = 1.0, [bool]$venstre = $false) {
+function Tegn-Mus([string]$tekst, [int]$vinkel, [double]$ret, [double]$alfa = 1.0, [bool]$venstre = $false, [bool]$tips = $false) {
     $b = 40
     if ($tekst) { $b = 40 + 4 + 30 + [int][Math]::Ceiling($script:musMG.MeasureString($tekst, $fSmå).Width) }
     $xi = $(if ($venstre) { $b - 40 } else { 0 })   # ikonets plass: pillen står på motsatt side når den ellers ville gå utenfor skjermkanten
@@ -2465,7 +2482,9 @@ function Tegn-Mus([string]$tekst, [int]$vinkel, [double]$ret, [double]$alfa = 1.
         $pill.AddArc($x0, 6, 28, 28, 90, 180); $pill.AddArc($x0 + $w - 28, 6, 28, 28, 270, 180); $pill.CloseFigure()
         $bak = New-Object Drawing.SolidBrush([Drawing.Color]::FromArgb([int](225 * $alfa), 11, 10, 18)); $g.FillPath($bak, $pill); $bak.Dispose(); $pill.Dispose()
         $pen = New-Object Drawing.Pen([Drawing.Color]::FromArgb([int](196 * $alfa), 196, 192, 222), 2); $pen.StartCap = 'Round'; $pen.EndCap = 'Round'
-        $g.DrawArc($pen, $x0 + 9, 13, 14, 14, $vinkel, 250); $pen.Dispose()
+        if ($tips) { $db = New-Object Drawing.SolidBrush([Drawing.Color]::FromArgb([int](230 * $alfa), 143, 135, 194)); $g.FillEllipse($db, $x0 + 12, 16, 8, 8); $db.Dispose() }   # tips: en rolig prikk i stedet for laste-snurren
+        else { $g.DrawArc($pen, $x0 + 9, 13, 14, 14, $vinkel, 250) }
+        $pen.Dispose()
         $tb = New-Object Drawing.SolidBrush([Drawing.Color]::FromArgb([int](217 * $alfa), 217, 214, 238)); $sf = New-Object Drawing.StringFormat; $sf.LineAlignment = 'Center'
         $g.DrawString($tekst, $fSmå, $tb, (New-Object Drawing.RectangleF(($x0 + 30), 6, ($w - 30), 28)), $sf); $tb.Dispose(); $sf.Dispose()
     }
@@ -2483,13 +2502,14 @@ $musKlokke.Add_Tick({ try {
     if ($peker.Visible) { Peker-Steg $dt }
     if ($script:pause -or -not $script:musPå) { if ($script:musVist) { $mus.Hide(); $script:musVist = $false; $script:musX = $null; $script:musFramme = $false }; return }
     if ($musInn.Visible) { return }   # skrivefeltet står ved siden av: bindersen holder seg i ro
+    $tipp = Mus-Tips
     if ($peker.Visible -and $script:jobb) { $script:musX = $script:px - 20; $script:musY = $script:py - 20; $script:musFramme = $false; $script:musRet = -90.0; $peker.Hide() }   # Bindy tenker: bindersen går tilbake til å følge musa (og flyr ut igjen med neste svar)
-    if ($peker.Visible) {   # veiledning: det er denne bindersen som flyr til målet (pekeren overtar), og den kommer tilbake herfra når pekeren er ferdig
+    if ($peker.Visible -and -not $tipp) {   # veiledning: det er denne bindersen som flyr til målet (men med tips vises en binders ved musa også) (pekeren overtar), og den kommer tilbake herfra når pekeren er ferdig
         if ($script:musVist) { $mus.Hide(); $script:musVist = $false }
         $script:musX = $script:px - 20; $script:musY = $script:py - 20; $script:musFramme = $false; $script:musRet = -90.0; return
     }
     $tekst = Mus-Tekst; $ny = $false; $alfa = 1.0
-    if ($tekst) { $script:musSist = $tekst; $script:musFade = 12 }
+    if ($tekst) { $script:musSist = $tekst; $script:musSistTips = [bool]($tipp -and $tekst -eq $tipp); $script:musFade = 12 }
     elseif ($script:musFade -gt 0 -and $script:musSist) {   # myk fade ut når tenkingen er ferdig (ikke med «reduser animasjon»)
         if ($script:rolig) { $script:musFade = 0 } else { $script:musFade -= $dt / 16.0; $tekst = $script:musSist; $alfa = [Math]::Max(0, $script:musFade / 12.0); $ny = $true }
     }
@@ -2510,7 +2530,7 @@ $musKlokke.Add_Tick({ try {
     if ($v -ne $script:musVenstre) { $script:musVenstre = $v; $ny = $true }
     $vx = $(if ($script:musVenstre) { $script:musB - 40 } else { 0 })   # vinduet starter så langt til venstre for ikonet
     if ($ny -or -not $script:musBmp) {
-        $gammel = $script:musBmp; $script:musBmp = Tegn-Mus $tekst $script:musVinkel $script:musRet $alfa $script:musVenstre; $script:musB = $script:musBmp.Width; $script:musTegnT = $nu
+        $gammel = $script:musBmp; $script:musBmp = Tegn-Mus $tekst $script:musVinkel $script:musRet $alfa $script:musVenstre ([bool]$script:musSistTips); $script:musB = $script:musBmp.Width; $script:musTegnT = $nu
         $vx = $(if ($script:musVenstre) { $script:musB - 40 } else { 0 })
         if ($gammel) { $gammel.Dispose() }
         if ($script:musVist) { $mus.Vis($script:musBmp, [int][Math]::Round($script:musX) - $vx, [int][Math]::Round($script:musY)) }
