@@ -702,7 +702,8 @@ function Fang-Alle {
 function Fang-Etter([string]$modus) {
     if ($modus -eq 'alle') { return Fang-Alle }
     $f = Fang-Vindu
-    if (-not $f.ok -or $f.vB -lt 700 -or $f.vH -lt 420) {   # vinduet er lite, eller finnes ikke (Startmenyen, oppgavelinjen): ta alle skjermer. Fang-Alle nekter selv hvis et sperret vindu er synlig.
+    # vinduet er lite: alle skjermer (som før). Finnes det ikke (Startmenyen, oppgavelinjen), gjelder det bare når du selv ber om det (ikke automatiske sjekker under veiledning).
+    if (($f.ok -and ($f.vB -lt 700 -or $f.vH -lt 420)) -or (-not $f.ok -and ($script:nesteManuell -or -not $script:vei))) {   # Fang-Alle nekter selv hvis et sperret vindu er synlig
         $a = Fang-Alle
         if ($a.ok) { if ($f.ok) { $f.bitmap.Dispose() }; $a.liten = $true; return $a }
     }
@@ -986,7 +987,7 @@ function Mus-Mål([int]$cx, [int]$cy, [int]$b, [int]$h, $wa) {
 
 # Tips ved musa når et steg har stått ubesvart en stund: «Står du fast? Trykk Ctrl+Alt+N». Vises ikke mens Bindy tenker.
 function Mus-Tips {
-    if (-not $script:vei -or $script:jobb -or $script:pause -or -not $script:veiSteg) { return '' }
+    if (-not $script:vei -or $script:jobb -or $script:pause -or -not $script:veiSteg -or $script:valg.Count) { return '' }   # ikke mens Bindy venter på at du velger noe
     if (([DateTime]::Now - $script:veiSist).TotalSeconds -lt 20) { return '' }
     return (L 'Stuck? Press {0}' $script:Taster.nextStep)
 }
@@ -2108,7 +2109,7 @@ function Send-Sjekk($sig, [string]$modell = $ModellSjekk) {
     $stille = $script:stilleSjekk; $script:stilleSjekk = $false   # settes på nytt rett før kallet, så det aldri henger igjen
     if ($script:veiSjekk -ge $MaksSjekker) { Stopp-Veiledning (L 'Guidance stopped after {0} checks.' $MaksSjekker); return }
     $f = Fang-Etter $(if ($script:veiAlle) { 'alle' } else { 'vindu' })
-    if (-not $f.ok) { if ($script:nesteManuell) { Sett-Toast $f.grunn }; return }   # trykket du Neste steg, skal du få vite hvorfor det ikke gikk
+    if (-not $f.ok) { if ($script:nesteManuell) { Sett-Toast $f.grunn }; $script:veiSist = Get-Date; return }   # veiSist: ikke prøv på nytt hver tikk   # trykket du Neste steg, skal du få vite hvorfor det ikke gikk
     Bruk-Bilde $f
     if (-not $stille) { $script:veiSjekk++ }   # stille sjekker (uten klikk) teller ikke mot taket
     $script:veiKlikkTid = $null; $script:veiSist = Get-Date
