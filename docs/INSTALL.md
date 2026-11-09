@@ -131,10 +131,10 @@ The script stops Bindy and removes `C:\Program Files\Bindy`, the certificates, t
 Off by default. It lets a Claude Code session on **this PC** use three tools: `bindy_se` (screenshot), `bindy_pek` (frame and pointer) and `bindy_veiled` (start a guidance), plus `bindy_status`. Each screenshot and each guidance needs one click from you.
 
 1. Install and start Bindy as above, then open the tray menu, **Settings…**, and turn on **Let Claude Code use Bindy (MCP)**.
-2. Tray menu, **Claude Code connection (MCP)…** shows a command like this (with your own token). Press Ctrl+C in the box and run it in a normal terminal:
+2. Tray menu (the paperclip icon by the clock), **Connect Claude Code (MCP)…** puts a command on the clipboard (with your own secret token). Open a normal PowerShell window (Start menu, type "PowerShell"), paste it and press Enter. It looks like this (`-s user` means "for my user, in every folder"):
    ```powershell
    claude mcp add --transport http bindy http://127.0.0.1:47831/mcp --header "Authorization: Bearer <token>" -s user
    ```
-3. Check with `claude mcp list` (it should say Connected), then start a **new** Claude Code session and ask it to look at your screen.
+3. Check with `claude mcp list` (it should say Connected), then start a **new** Claude Code session and ask it to look at your screen. You will see a small window at the top of the screen, "Claude Code wants to see …", and you must click **Share** (or **Decline**).
 
-Notes: Bindy only listens on `127.0.0.1` (this PC), never on the network. **New MCP token** in the tray menu replaces the token (then run `claude mcp remove bindy -s user` and add it again). Turning the setting off stops the server. Read the MCP parts of [SECURITY.md](SECURITY.md) first.
+Notes: the token is a secret (it is also saved in plain text in your `.claude.json`). If you installed Bindy before MCP existed, run `scripts\install.ps1` again to update. Bindy only listens on `127.0.0.1` (this PC), never on the network. **New MCP token** in the tray menu replaces the token (then run `claude mcp remove bindy -s user` and add it again). Turning the setting off stops the server. Read the MCP parts of [SECURITY.md](SECURITY.md) first.

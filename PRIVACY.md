@@ -29,7 +29,7 @@ Everything is in `%LOCALAPPDATA%\Bindy\`:
 |---|---|
 | `bindy-oppgave.md` | Current goal and progress, in plain text. **Contains Claude's step text, which may refer to what was on the screen** |
 | `bindy-oppgave.forrige.md` | Archived copy of the previous task |
-| `bindy-settings.json` | Language, hotkeys and whether Claude Code may start guidance |
+| `bindy-settings.json` | Language, hotkeys, whether Claude Code may start guidance (old way), whether MCP is on, and the MCP port |
 | `bindy-feil.log` | Error messages (may contain text from Claude), cut at 100 kB |
 | `bindy-host-feil.log` | Errors from the launcher (`BindyStart.exe`), rare |
 | `bindy-start.txt` | Only exists for a moment: a request to start guidance, deleted as soon as Bindy reads it |
