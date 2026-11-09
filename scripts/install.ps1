@@ -45,4 +45,16 @@ if (-not $NoAutostart) {
     Set-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run' -Name 'Bindy' -Value "`"$dest\BindyStart.exe`""
 }
 try { $lnk = (New-Object -ComObject WScript.Shell).CreateShortcut("$env:ProgramData\Microsoft\Windows\Start Menu\Programs\Bindy.lnk"); $lnk.TargetPath = "$dest\BindyStart.exe"; $lnk.WorkingDirectory = $dest; $lnk.IconLocation = "$dest\BindyStart.exe,0"; $lnk.Save() } catch { Write-Host "Could not make the Start menu shortcut: $_" }   # this is how you find Bindy in Start
+# MCP over Tailscale (only used if "Allow from home server" is on in Bindy's Settings): let Bindy listen on this PC's Tailscale address,
+# and let only the home server through the firewall to that port. Run this script again if the Tailscale address changes.
+$mcpPort = 47831; $mcpServer = '100.x.x.1'
+$ts = (Get-NetIPAddress -InterfaceAlias Tailscale -AddressFamily IPv4 -ErrorAction SilentlyContinue | Select-Object -First 1).IPAddress
+if ($ts) {
+    $url = "http://${ts}:$mcpPort/"
+    netsh http delete urlacl url=$url 2>&1 | Out-Null
+    netsh http add urlacl url=$url user="$env:USERDOMAIN\$env:USERNAME" | Out-Null
+    Get-NetFirewallRule -DisplayName 'Bindy MCP' -ErrorAction SilentlyContinue | Remove-NetFirewallRule
+    New-NetFirewallRule -DisplayName 'Bindy MCP' -Direction Inbound -Action Allow -Protocol TCP -LocalPort $mcpPort -RemoteAddress $mcpServer -InterfaceAlias Tailscale -Profile Any | Out-Null
+    Write-Host "MCP: Bindy may listen on $url, and only $mcpServer is let through the firewall to port $mcpPort."
+} else { Write-Host 'Tailscale was not found: MCP from the home server is not set up (run this script again once Tailscale is running).' }
 Write-Host "Done. Start Bindy from the Start menu, or: & '$dest\BindyStart.exe'"
