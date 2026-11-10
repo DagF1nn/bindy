@@ -1,4 +1,4 @@
-# Bindy
+﻿# Bindy
 
 A helper on your screen for Windows. Press a hotkey, ask a question, and Bindy (a small paperclip in an "island" at the top of the screen) answers with Claude, based on what you see. During **guidance** it draws a frame and points at the one thing you should click, one step at a time, and checks along the way that you got it right.
 
@@ -48,6 +48,10 @@ powershell -STA -File src\bindy.ps1 -Sjekk       # self-check, sends nothing
 ## Contribute and report
 
 See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md). For vulnerabilities see [SECURITY.md](SECURITY.md); do not open a public issue.
+
+## Support
+
+I build free apps that make everyday life a little easier. Each one takes time and care. If Bindy helped you, [a coffee](https://buymeacoffee.com/dagf1nn) keeps the next one coming.
 
 ## License
 
