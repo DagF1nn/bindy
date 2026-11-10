@@ -2,6 +2,9 @@
 
 A helper on your screen for Windows. Press a hotkey, ask a question, and Bindy (a small paperclip in an "island" at the top of the screen) answers with Claude, based on what you see. During **guidance** it draws a frame and points at the one thing you should click, one step at a time, and checks along the way that you got it right.
 
+<p align="center"><img src="docs/demo.gif" alt="Animated illustration: a paperclip points at the button to click, one step at a time" width="270"></p>
+<p align="center"><sub>Animated illustration of how guidance works (not a real screen recording).</sub></p>
+
 > **Status: 0.x, under development.** The interface is in English by default; Norwegian is available in Settings.
 
 ## What it does
