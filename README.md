@@ -51,8 +51,7 @@ See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md). For vulnerabilities see [SECURIT
 
 ## Support
 
-I build free apps that make everyday life a little easier. Each one takes time and care. If Bindy helped you, [a coffee](https://buymeacoffee.com/dagf1nn) keeps the next one coming.
-
+Hi, I'm an electrician who builds free apps in my spare time to make everyday life easier. If one of them saved you time, [a coffee](https://buymeacoffee.com/dagf1nn) means a lot.
 ## License
 
 MIT, see [LICENSE](LICENSE).
