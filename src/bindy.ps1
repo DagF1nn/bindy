@@ -82,7 +82,7 @@ $script:NO = @{
     'Turn on Superguide in Settings first.' = 'Slå på Superguide i Settings først.'
     'Write the goal in the box first.' = 'Skriv målet i feltet først.'
     'Superguide: Bindy does the steps for you' = 'Superguide: Bindy gjør stegene for deg'
-    'Bindy will click, scroll and type on this PC by itself, and send screenshots to Claude while it does. It never touches passwords, payments, deleting, uninstalling or sending messages. Esc, Pause or Stop ends it at once. Turn it on?' = 'Bindy vil klikke, scrolle og skrive på denne PC-en selv, og sender skjermbilder til Claude mens den gjør det. Den rører aldri passord, betaling, sletting, avinstallering eller sending av meldinger. Esc, Pause eller Stopp avslutter med en gang. Slå på?'
+    'Bindy will click, scroll and type on this PC by itself, and send screenshots to Claude while it does. It never touches passwords, payments, deleting, uninstalling or sending messages. Esc, Pause or Stop ends it at once. This is very early access with limited features: expect bugs. Turn it on?' = 'Bindy vil klikke, scrolle og skrive på denne PC-en selv, og sender skjermbilder til Claude mens den gjør det. Den rører aldri passord, betaling, sletting, avinstallering eller sending av meldinger. Esc, Pause eller Stopp avslutter med en gang. Dette er veldig tidlig utgave med begrensede funksjoner: forvent feil. Slå på?'
     'Off by default. Start it from the tray menu.' = 'Av som standard. Start fra tray-menyen.'
     'Claude Code wants Bindy to click and type on your PC by itself' = 'Claude Code vil la Bindy klikke og skrive selv på PC-en din'
     'Let Bindy click and type' = 'La Bindy klikke og skrive'
@@ -2497,7 +2497,7 @@ function Vis-Innstillinger {
     $script:sgBryter = & $bryter (L 'Superguide: Bindy does the steps for you') $script:TillatSg { param($snd, $ev)
         if ($script:sgSetter) { return }
         if ($snd.Checked) {
-            $sv = [Windows.Forms.MessageBox]::Show($script:innstForm, (L 'Bindy will click, scroll and type on this PC by itself, and send screenshots to Claude while it does. It never touches passwords, payments, deleting, uninstalling or sending messages. Esc, Pause or Stop ends it at once. Turn it on?'), 'Bindy', 'YesNo', 'Warning', 'Button2')
+            $sv = [Windows.Forms.MessageBox]::Show($script:innstForm, (L 'Bindy will click, scroll and type on this PC by itself, and send screenshots to Claude while it does. It never touches passwords, payments, deleting, uninstalling or sending messages. Esc, Pause or Stop ends it at once. This is very early access with limited features: expect bugs. Turn it on?'), 'Bindy', 'YesNo', 'Warning', 'Button2')
             if ($sv -ne 'Yes') { $script:sgSetter = $true; $snd.Checked = $false; $script:sgSetter = $false; return }
         }
         $script:TillatSg = $snd.Checked; Lagre-Innst }

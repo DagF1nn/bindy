@@ -29,6 +29,8 @@ This means:
 
 ## Superguide: Bindy acts for you (off by default)
 
+**Early access:** Superguide has limited capabilities and is very early. Expect bugs, wrong clicks and things that simply do not work. The limits below are real, but they are not a guarantee.
+
 **In short:** with **Superguide** on in Settings (confirmation the first time), Bindy clicks, scrolls, types, presses hotkeys and opens apps by itself to reach a goal you give it. Start it from the tray menu, or Claude Code asks with `bindy_superguide` (your click every time). This is the riskiest feature in Bindy: a wrong guess or a prompt injection can become a real click.
 
 - **Who decides:** Bindy's own Claude (no tools), from screenshots of **all screens** sent to Anthropic, one action per call, always a fresh screenshot after each action. Screen text is told to be data, but that is a request to the model, not a guarantee.

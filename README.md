@@ -1,5 +1,7 @@
 ﻿# Bindy
 
+> **Early access.** Bindy is an early version with limited features. Expect bugs and rough edges. **Superguide** (Bindy doing the steps for you) is the most experimental part: it works in a short list of programs, has not been tested widely, and can get things wrong. Use it on a PC you own, watch it, and press Esc to stop. Reports and ideas are welcome as GitHub issues.
+
 A helper on your screen for Windows. Press a hotkey, ask a question, and Bindy (a small paperclip in an "island" at the top of the screen) answers with Claude, based on what you see. During **guidance** it draws a frame and points at the one thing you should click, one step at a time, and checks along the way that you got it right.
 
 <p align="center"><img src="docs/demo.gif" alt="Animated illustration: a paperclip points at the button to click, one step at a time" width="270"></p>
