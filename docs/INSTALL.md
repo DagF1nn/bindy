@@ -127,7 +127,7 @@ The script stops Bindy and removes `C:\Program Files\Bindy`, the certificates, t
 
 ## Optional: let Claude Code use Bindy (MCP)
 
-Off by default. It lets a Claude Code session on **this PC** use three tools: `bindy_se` (screenshot), `bindy_pek` (frame and pointer) and `bindy_veiled` (start a guidance), plus `bindy_status`. Each screenshot and each guidance needs one click from you.
+Off by default. It lets a Claude Code session on **this PC** use four tools: `bindy_se` (screenshot), `bindy_pek` (frame and pointer) and `bindy_veiled` (start a guidance) and `bindy_superguide` (Bindy does the steps itself, only if Superguide is also on in Settings), plus `bindy_status`. Each screenshot and each guidance needs one click from you.
 
 1. Install and start Bindy as above, then open the tray menu, **Settings…**, and turn on **Let Claude Code use Bindy (MCP)**.
 2. Tray menu (the paperclip icon by the clock), **Connect Claude Code (MCP)…** puts a command on the clipboard (with your own secret token). Open a normal PowerShell window (Start menu, type "PowerShell"), paste it and press Enter. It looks like this (`-s user` means "for my user, in every folder"):
