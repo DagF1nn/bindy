@@ -859,6 +859,27 @@ function Del-Svar([string]$svar) {
     if ($status -eq 'SPØRSMÅL') { $boks = $null; $pk = $null } else { $valg = @() }
     return @{ tekst = $svar.Trim(); boks = $boks; status = $status; behov = $behov; lim = $lim; skriv = $skriv; peker = $pk; valg = $valg; former = $former.ToArray() }
 }
+# Superguide: Claude svarer med nøyaktig EN handlingslinje `SG: <HANDLING> ...` (valgfritt `PLAN:` først). Parseren er streng: flere linjer, ukjente
+# handlinger, for lange felt og tall utenfor området avvises. Koordinater er bildets piksler (omregnes seinere). Returnerer @{ ok; h; a; fei }.
+function Sg-DelSvar([string]$svar) {
+    if ($svar.Length -gt 20000) { $svar = $svar.Substring(0, 20000) }
+    $ms = [regex]::Matches($svar, '(?im)^[ \t]*SG:[ \t]*([^\r\n]*)')
+    if ($ms.Count -ne 1) { return @{ ok = $false; fei = "SG-linjer: $($ms.Count) (må være 1)" } }
+    $l = $ms[0].Groups[1].Value.Trim()
+    if ($l.Length -gt 400 -or $l -match '[\x00-\x08\x0B\x0C\x0E-\x1F]') { return @{ ok = $false; fei = 'ugyldig linje' } }
+    $tall = '(\d{1,5})'
+    switch -Regex ($l) {
+        "^(KLIKK|DKLIKK|HKLIKK)\s+$tall\s+$tall$" { return @{ ok = $true; h = $Matches[1]; a = @([int]$Matches[2], [int]$Matches[3]) } }
+        "^SCROLL\s+(opp|ned)\s+(\d{1,2})\s+$tall\s+$tall$" { $n = [int]$Matches[2]; if ($n -ge 1 -and $n -le 20) { return @{ ok = $true; h = 'SCROLL'; a = @($Matches[1], $n, [int]$Matches[3], [int]$Matches[4]) } } }
+        '^SKRIV\s+(.{1,300})$' { return @{ ok = $true; h = 'SKRIV'; a = @($Matches[1]) } }
+        '^TAST\s+([a-z0-9+]{1,30})$' { return @{ ok = $true; h = 'TAST'; a = @($Matches[1]) } }
+        '^APP\s+([^\r\n]{1,80})$' { return @{ ok = $true; h = 'APP'; a = @($Matches[1].Trim()) } }
+        '^VENT\s+(\d{1,5})$' { $v = [int]$Matches[1]; if ($v -le 10000) { return @{ ok = $true; h = 'VENT'; a = @($v) } } }
+        '^FERDIG(\s+[^\r\n]{0,200})?$' { return @{ ok = $true; h = 'FERDIG'; a = @() } }
+        '^STOPP(\s+[^\r\n]{0,200})?$' { return @{ ok = $true; h = 'STOPP'; a = @($l.Substring(5).Trim()) } }
+    }
+    return @{ ok = $false; fei = 'ukjent eller ugyldig handling' }
+}
 # Det som vises mens svaret strømmer inn: uten styrelinjer og halvferdige koder.
 function Rens-Delvis([string]$t) {
     if ($t.Length -gt 20000) { $t = $t.Substring(0, 20000) }
@@ -1424,6 +1445,12 @@ if ($Sjekk) {
     }
     foreach ($t in 'Min bank - Edge', 'Bitwarden', 'Notepad') {   # sperrelista skal treffe de to første
         if (($t -match $Sperret) -ne ($t -ne 'Notepad')) { Write-Host "FEIL: sperrelista for '$t'"; $fe++ }
+    }
+    foreach ($t in @(@("SG: KLIKK 640 300", 'KLIKK'), @("PLAN: x`nSG: SKRIV Hei æøå", 'SKRIV'), @("SG: TAST ctrl+s", 'TAST'), @("SG: SCROLL ned 5 100 200", 'SCROLL'), @("SG: FERDIG ok", 'FERDIG'), @("SG: STOPP skjermen ber om noe", 'STOPP'))) {
+        $d = Sg-DelSvar $t[0]; if (-not $d.ok -or $d.h -ne $t[1]) { Write-Host "FEIL: Sg-DelSvar '$($t[0])' ga $($d.h) $($d.fei)"; $fe++ }
+    }
+    foreach ($t in "SG: KLIKK 1 2`nSG: KLIKK 3 4", "KLIKK 1 2", "SG: KLIKK 99999999 1", "SG: KLIKK 1 2 3", "SG: SCROLL ned 99 1 1", "SG: ÅPNE cmd", "SG: VENT 99999", "SG: SKRIV " + ('x' * 301), "SG: KLIKK 5 5 SG: KLIKK 6 6") {
+        $d = Sg-DelSvar $t; if ($d.ok) { Write-Host "FEIL: Sg-DelSvar skulle avvist '$($t.Substring(0, [Math]::Min(30, $t.Length)))'"; $fe++ }
     }
     $d = Del-Svar "STATUS: GJORT`nTrykk her.`n[[MARKER 10 20 110 60]]"
     if ($d.tekst -ne 'Trykk her.' -or ($d.boks -join ',') -ne '10,20,110,60' -or $d.status -ne 'GJORT') { Write-Host "FEIL: Del-Svar ($($d.status) / $($d.tekst))"; $fe++ }
