@@ -51,6 +51,25 @@ public static class SgUtforer {
     static readonly Regex ProsessKreverHenrik = new Regex("^(cmd|powershell|powershell_ise|pwsh|windowsterminal|wt|conhost|regedit|mmc|taskmgr|wscript|cscript|mshta|python|pythonw|py|wsl|wslhost|bash|ssh|code|mintty|msiexec|msconfig|control|searchhost|searchapp|shellexperiencehost|startmenuexperiencehost|run)$", RegexOptions.IgnoreCase);
     static readonly Regex AppNekt = new Regex("uninstall|avinstaller|setup|install|regedit|cmd|powershell|terminal|command prompt|ledetekst", RegexOptions.IgnoreCase);
 
+    // Allow list: Superguide only acts in these programs (checked on the foreground window AND the window under the pointer, after the block lists).
+    // Explorer counts only for the taskbar and desktop, never for File Explorer windows. "ApplicationFrameHost" hosts Store apps like Calculator and Settings.
+    static readonly string StandardApper = "chrome|msedge|firefox|brave|opera|vivaldi|notepad|calc|calculatorapp|mspaint|paintstudio.view|winword|excel|powerpnt|onenote|systemsettings|applicationframehost";
+    static Regex tillatt = new Regex("^(" + StandardApper + ")$", RegexOptions.IgnoreCase);
+    static readonly Regex ShellKlasse = new Regex("^(Shell_TrayWnd|Shell_SecondaryTrayWnd|Progman|WorkerW|TopLevelWindowForOverflowXamlIsland|NotifyIconOverflowWindow)$");
+    // Extra program names (process names without .exe) the user adds in settings: "a|b|c". Names are validated; the block lists above still win.
+    public static void Tillat(string ekstra) {
+        string s = StandardApper;
+        foreach (string n in (ekstra ?? "").Split('|')) if (Regex.IsMatch(n, @"^[A-Za-z0-9._-]{1,40}\z")) s += "|" + Regex.Escape(n);
+        tillatt = new Regex("^(" + s + ")$", RegexOptions.IgnoreCase);
+    }
+    static bool ErTillatt(string prosess, string klasse) {
+        if (string.IsNullOrEmpty(prosess)) return false;   // unreadable (for example elevated): fail closed
+        if (string.Equals(prosess, "explorer", StringComparison.OrdinalIgnoreCase)) return ShellKlasse.IsMatch(klasse ?? "");
+        return tillatt.IsMatch(prosess);
+    }
+    // Call after the user approved something in a Bindy dialog: that click is not "the user took over".
+    public static void Synk() { egenInput = SisteInput(); }
+
     // Set the block lists (the same patterns bindy.ps1 uses for screenshots). Without this every action is refused.
     public static void Init(string tittelMonster, string prosessMonster) {
         if (string.IsNullOrEmpty(tittelMonster) || string.IsNullOrEmpty(prosessMonster)) { klar = false; return; }
@@ -182,6 +201,8 @@ public static class SgUtforer {
         if (Regex.IsMatch(t, sperret, RegexOptions.IgnoreCase) || Regex.IsMatch(pn, sperretProsess, RegexOptions.IgnoreCase)) return "FEIL:SPERRET:" + Kort(t);
         if (ProsessKreverHenrik.IsMatch(pn)) return "FEIL:KREVER_HENRIK:" + pn;
         if (Bekreft.IsMatch(t)) return "FEIL:KREVER_HENRIK:" + Kort(t);
+        StringBuilder kl = new StringBuilder(128); GetClassName(h, kl, 128);
+        if (!ErTillatt(pn, kl.ToString())) return "FEIL:APP_IKKE_TILLATT:" + Kort(pn);
         return null;
     }
     // UIA's IsPassword depends on the control's provider, so also read the Win32 edit style ES_PASSWORD.

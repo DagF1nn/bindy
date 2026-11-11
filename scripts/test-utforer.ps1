@@ -20,6 +20,7 @@ function Sjekk([string]$navn, $faktisk, [string]$forventetStart) {
 # 1. Before Init: everything refused
 Sjekk 'ikke initialisert' ([SgUtforer]::Skriv('a')) 'FEIL:IKKE_KLAR'
 [SgUtforer]::Init($Sperret, $SperretProsess)
+[SgUtforer]::Tillat('SgTestForm')   # testvinduet må være på tillatelseslisten
 [SgUtforer]::Start(40, 120)
 
 # 2. Pure refusals (no input is sent)
@@ -34,6 +35,8 @@ Sjekk 'alt+f4 krever Henrik' ([SgUtforer]::Tast('alt+f4')) 'FEIL:KREVER_HENRIK'
 $bk = [SgUtforer].GetField('Bekreft', [Reflection.BindingFlags]'NonPublic,Static').GetValue($null)   # \b i en vanlig C#-streng var backspace: ordgrenser må virke
 foreach ($n in 'Send', 'Send (Ctrl-Enter)', 'Run', 'Allow', 'Remove', 'Pay', 'Fjern', 'Kjør', 'Tillat', 'Pay now', 'Uninstall', 'Windows Security') { Sjekk "Bekreft treffer '$n'" ([string]$bk.IsMatch($n)) 'True' }
 foreach ($n in 'Resend', 'Prune', 'Payload', 'Cancel', 'Save') { Sjekk "Bekreft treffer ikke '$n'" ([string]$bk.IsMatch($n)) 'False' }
+$et = [SgUtforer].GetMethod('ErTillatt', [Reflection.BindingFlags]'NonPublic,Static')   # tillatelsesliste: (prosess, vindusklasse)
+foreach ($c in @(@('chrome', '', 'True'), @('notepad', '', 'True'), @('ApplicationFrameHost', '', 'True'), @('explorer', 'Shell_TrayWnd', 'True'), @('explorer', 'Progman', 'True'), @('explorer', 'CabinetWClass', 'False'), @('powershell', '', 'False'), @('BindyStart', '', 'False'), @('regedit', '', 'False'), @('', '', 'False'), @('SgTestForm', '', 'True'))) { Sjekk "tillatt $($c[0]) $($c[1])" ([string]$et.Invoke($null, @($c[0], $c[1]))) $c[2] }
 Sjekk 'ukjent tast' ([SgUtforer]::Tast('foo')) 'FEIL:UGYLDIG'
 Sjekk 'dobbel modifikator' ([SgUtforer]::Tast('ctrl+ctrl+s')) 'FEIL:UGYLDIG'
 Sjekk 'kontrolltegn i Skriv' ([SgUtforer]::Skriv("a`nb")) 'FEIL:UGYLDIG'
