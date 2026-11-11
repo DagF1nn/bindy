@@ -915,8 +915,8 @@ function Sg-Utfør($d, [double]$L, [double]$T, [double]$sk, [int]$bw, [int]$bh) 
         'VENT' { return [SgUtforer]::Vent([int]$d.a[0]) }
         'APP' {
             $n = [string]$d.a[0]; $alle = @(Get-StartApps -ErrorAction SilentlyContinue)
-            $t = @($alle | Where-Object { $_.Name -eq $n }); if (-not $t.Count) { $t = @($alle | Where-Object { $_.Name -like ('*' + [Management.Automation.WildcardPattern]::Escape($n) + '*') }) }
-            if ($t.Count -lt 1) { return 'FEIL:IKKE_FUNNET:app' }
+            $t = @($alle | Where-Object { $_.Name -eq $n })   # eksakt navn og bare ett treff: ellers kunne en annen app enn tenkt startet
+            if ($t.Count -ne 1) { return 'FEIL:IKKE_FUNNET:app (need the exact name, one match)' }
             return [SgUtforer]::ApneApp([string]$t[0].AppID)
         }
     }

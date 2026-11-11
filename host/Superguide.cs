@@ -46,9 +46,9 @@ public static class SgUtforer {
     static int maxSek = 300;
     static readonly object lås = new object();
     // Needs Henrik's own click: payments, deleting, uninstalling, sending, security settings. Matched on window title and element name.
-    static readonly Regex Bekreft = new Regex("uninstall|avinstaller|delete|slett|formater|format (disk|drive|station)|betal|payment|purchase|checkout|kjøp|buy now|^send$|send (e-?post|melding|message|email)|firewall|brannmur|defender|user account control|brukerkontokontroll|smartscreen|reset this pc|tilbakestill pc|empty recycle|tøm papirkurv", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    static readonly Regex Bekreft = new Regex("uninstall|avinstaller|delete|slett|formater|format (disk|drive|station)|betal|payment|purchase|checkout|kjøp|buy now|^send\b|send (e-?post|melding|message|email)|\bpay\b|pay now|place order|bestill|overfør|transfer|\bremove\b|\bfjern\b|\brun\b|\bkjør\b|\ballow\b|\btillat\b|sign out|logg ut|publish|firewall|brannmur|defender|windows security|windows-sikkerhet|user account control|brukerkontokontroll|smartscreen|reset this pc|tilbakestill pc|empty recycle|tøm papirkurv", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     // Typing here would be running code: terminals and the registry always need Henrik himself.
-    static readonly Regex ProsessKreverHenrik = new Regex("^(cmd|powershell|powershell_ise|pwsh|windowsterminal|wt|conhost|regedit|mmc)$", RegexOptions.IgnoreCase);
+    static readonly Regex ProsessKreverHenrik = new Regex("^(cmd|powershell|powershell_ise|pwsh|windowsterminal|wt|conhost|regedit|mmc|taskmgr|wscript|cscript|mshta|python|pythonw|py|wsl|wslhost|bash|ssh|code|mintty|msiexec|msconfig|control|searchhost|searchapp|shellexperiencehost|startmenuexperiencehost|run)$", RegexOptions.IgnoreCase);
     static readonly Regex AppNekt = new Regex("uninstall|avinstaller|setup|install|regedit|cmd|powershell|terminal|command prompt|ledetekst", RegexOptions.IgnoreCase);
 
     // Set the block lists (the same patterns bindy.ps1 uses for screenshots). Without this every action is refused.
@@ -96,6 +96,7 @@ public static class SgUtforer {
         ushort[] mods; ushort key; string fe = Les(kombinasjon, out mods, out key);
         if (fe != null) return Svar("TAST", fe);
         string g = Port("TAST", false, 0, 0); if (g != null) return Svar("TAST", g);
+        if (key == 0x0D || key == 0x20) { string fe2 = FokusPassord(); if (fe2 != null) return Svar("TAST", fe2); }   // Enter/Space press the focused element: same checks as a click
         List<INPUT> l = new List<INPUT>();
         foreach (ushort m in mods) l.Add(Ki(m, 0, 0));
         l.Add(Ki(key, 0, ErUtvidet(key) ? 0x0001u : 0)); l.Add(Ki(key, 0, (ErUtvidet(key) ? 0x0001u : 0) | 0x0002));
@@ -165,7 +166,7 @@ public static class SgUtforer {
             string el = null;
             if (!MedTidsavbrudd(delegate {
                 AutomationElement e = AutomationElement.FromPoint(new System.Windows.Point(x, y));
-                if (e == null) return;
+                if (e == null) { el = "FEIL:UIA_TIDSAVBRUDD:ukjent element"; return; }   // fail closed
                 if ((bool)e.GetCurrentPropertyValue(AutomationElement.IsPasswordProperty)) el = "FEIL:PASSORDFELT";
                 else if (Bekreft.IsMatch(e.Current.Name ?? "")) el = "FEIL:KREVER_HENRIK:" + Kort(e.Current.Name);
             })) return "FEIL:UIA_TIDSAVBRUDD";
@@ -197,6 +198,7 @@ public static class SgUtforer {
             AutomationElement e = AutomationElement.FocusedElement;
             if (e == null) { res = "FEIL:UIA_TIDSAVBRUDD:ukjent fokus"; return; }   // refuse to type into something unknown
             if ((bool)e.GetCurrentPropertyValue(AutomationElement.IsPasswordProperty)) res = "FEIL:PASSORDFELT";
+            else if (Bekreft.IsMatch(e.Current.Name ?? "")) res = "FEIL:KREVER_HENRIK";
         })) return "FEIL:UIA_TIDSAVBRUDD";
         return res;
     }
@@ -224,7 +226,7 @@ public static class SgUtforer {
     static string ProsessNavn(IntPtr h) {
         try { uint pid; GetWindowThreadProcessId(h, out pid); return Process.GetProcessById((int)pid).ProcessName; } catch { return ""; }
     }
-    static string Kort(string s) { s = (s ?? "").Replace("\r", " ").Replace("\n", " "); return s.Length > 60 ? s.Substring(0, 60) : s; }
+    static string Kort(string s) { s = (s ?? "").Replace("\r", " ").Replace("\n", " "); return s.Length > 20 ? s.Substring(0, 20) : s; }   // short: the log may end up showing window titles
     // UIA can hang on a frozen window: run on a thread we may abandon.
     static bool MedTidsavbrudd(ThreadStart f) {
         Exception feil = null; Thread t = new Thread(delegate() { try { f(); } catch (Exception e) { feil = e; } });
@@ -249,8 +251,12 @@ public static class SgUtforer {
             else if (tast.Length > 1 && tast[0] == 'f' && int.TryParse(tast.Substring(1), out f) && f >= 1 && f <= 12) key = (ushort)(0x6F + f);
             else return "FEIL:UGYLDIG:tast";
         }
-        if (win && !(m.Count == 1 && (tast == "d" || tast == "e" || tast == "i" || tast == "s" || tast == "a"))) return "FEIL:UGYLDIG:win-kombinasjon nektet";
+        // Win+S/Win+E (search box and Explorer address bar start any program) and Ctrl+Shift+Esc (Task Manager: Run new task) are refused like Win+R.
         if (key == 0x2E && m.Contains(0x11) && m.Contains(0x12)) return "FEIL:UGYLDIG:ctrl+alt+delete nektet";
+        if (win && !(m.Count == 1 && (tast == "d" || tast == "i" || tast == "a"))) return "FEIL:UGYLDIG:win-kombinasjon nektet";
+        if (m.Contains(0x11) && m.Contains(0x10) && key == 0x1B) return "FEIL:UGYLDIG:ctrl+shift+esc nektet";
+        // Keys that delete, send or close without a dialog, or put a path in an address bar, need Henrik himself.
+        if (key == 0x2E || (key == 0x0D && m.Contains(0x11)) || (key == 0x73 && m.Contains(0x12)) || (key == 0x57 && m.Contains(0x11)) || (key == 0x4C && m.Contains(0x11)) || (key == 0x44 && m.Contains(0x12)) || key == 0x75) return "FEIL:KREVER_HENRIK:tast";
         mods = m.ToArray(); return null;
     }
     // Log: time, action, result. Never the typed text or screenshots.
