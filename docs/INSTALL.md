@@ -65,11 +65,10 @@ You should get `OK` back. If this does not work, Bindy will not work either.
 
 ## Step 3: Install Bindy
 
-1. Download the latest release (`Bindy-x.y.z.zip`) from **Releases** on GitHub. Check the SHA-256 sum against the one on the release page:
-   ```powershell
-   Get-FileHash .\Bindy-x.y.z.zip -Algorithm SHA256
-   ```
-2. Unzip to a folder, for example `C:\Users\<you>\Bindy`. Do read `src\bindy.ps1` first. It is the whole program, in plain text. The installer copies the files to a folder only an administrator can write to before it shows the sums and signs, so that copy is what gets installed.
+Bindy is installed from source: there is no ready-made exe. The installer builds and signs it on your own PC.
+
+1. Get the code: on the GitHub page choose **Code → Download ZIP**, or run `git clone https://github.com/DagF1nn/bindy.git`. Use a tagged release (for example `git checkout v0.1.2`) if you want a version that has been tested.
+2. Unzip to a folder, for example `C:\Users\<you>\Bindy` (skip this after `git clone`). Do read `src\bindy.ps1` first. It is the whole program, in plain text. The installer copies the files to a folder only an administrator can write to before it shows the sums and signs, so that copy is what gets installed.
 3. Open **PowerShell as administrator** (Win+X, "Terminal (Admin)") and run:
    ```powershell
    powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1
@@ -114,7 +113,7 @@ The four global hotkeys can be changed in **Settings** (the gear in the panel, o
 
 ## Updating
 
-Download the new release, unzip, and run `scripts\install.ps1` as administrator again. It replaces the files and cleans up the old certificate.
+Download the new code (or run `git pull`), and run `scripts\install.ps1` as administrator again. It replaces the files and cleans up the old certificate.
 
 ## Uninstalling
 

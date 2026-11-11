@@ -11,7 +11,7 @@ Bindy is not ordinary software: to draw over the Start menu it needs **UI access
 1. Makes a self-signed code-signing certificate (`CN=Bindy local signing`) and signs `BindyStart.exe`.
 2. Puts the certificate in the machine's **Root** and **TrustedPublisher** stores. Anything signed with that key is then trusted on the machine.
 3. **Deletes the certificate and the private key** (`Remove-Item -DeleteKey`) right after signing, also on failure, so nobody can sign anything else with it. The key is made non-exportable and only lives while the script runs.
-4. Copies the sources to `C:\Program Files\Bindy\staging` (only an administrator can write there), builds and shows the SHA-256 from there, and signs and copies **the same copy** to `C:\Program Files\Bindy\`. No ordinary process can swap the files between the hash display and the signing. Still compare the `bindy.ps1` sum with the one on the release page.
+4. Copies the sources to `C:\Program Files\Bindy\staging` (only an administrator can write there), builds and shows the SHA-256 from there, and signs and copies **the same copy** to `C:\Program Files\Bindy\`. No ordinary process can swap the files between the hash display and the signing. Read the source before you run the installer: there is no published checksum to compare with.
 
 This means:
 
@@ -49,4 +49,4 @@ With **Let Claude Code use Bindy (MCP)** on in Settings, Bindy listens on `127.0
 
 ## Recommended use
 
-Only run it on a machine you own. Do not install a release whose checksum you have not checked. Do not let it look at windows with secret content: press **Ctrl+Alt+P** (pause) first.
+Only run it on a machine you own. Do not install code you have not read. Do not let it look at windows with secret content: press **Ctrl+Alt+P** (pause) first.
