@@ -82,9 +82,41 @@ $script:NO = @{
     'Write the goal in the box first.' = 'Skriv målet i feltet først.'
     'Superguide: Bindy does the steps for you' = 'Superguide: Bindy gjør stegene for deg'
     'Bindy will click, scroll and type on this PC by itself, and send screenshots to Claude while it does. It never touches passwords, payments, deleting, uninstalling or sending messages. Esc, Pause or Stop ends it at once. Turn it on?' = 'Bindy vil klikke, scrolle og skrive på denne PC-en selv, og sender skjermbilder til Claude mens den gjør det. Den rører aldri passord, betaling, sletting, avinstallering eller sending av meldinger. Esc, Pause eller Stopp avslutter med en gang. Slå på?'
-    'Off by default. Start it from the tray menu, or Claude Code asks you first.' = 'Av som standard. Start fra tray-menyen, eller Claude Code spør deg først.'
-    'Claude Code wants Bindy to do this on your PC by itself (it clicks and types)' = 'Claude Code vil at Bindy skal gjøre dette på PC-en din selv (den klikker og skriver)'
-    'Let Bindy do it' = 'La Bindy gjøre det'
+    'Off by default. Start it from the tray menu.' = 'Av som standard. Start fra tray-menyen.'
+    'Claude Code wants Bindy to click and type on your PC by itself' = 'Claude Code vil la Bindy klikke og skrive selv på PC-en din'
+    'Let Bindy click and type' = 'La Bindy klikke og skrive'
+    'Superguide is not available in this build of Bindy.' = 'Superguide finnes ikke i denne versjonen av Bindy.'
+    'Bindy is busy. Try again in a moment.' = 'Bindy er opptatt. Prøv igjen om litt.'
+    'The goal is empty or longer than 300 characters.' = 'Målet er tomt eller lengre enn 300 tegn.'
+    'Superguide step {0}: {1}. Esc stops.' = 'Superguide steg {0}: {1}. Esc stopper.'
+    'clicking' = 'klikker'
+    'double-clicking' = 'dobbeltklikker'
+    'right-clicking' = 'høyreklikker'
+    'scrolling' = 'ruller'
+    'typing' = 'skriver'
+    'pressing keys' = 'trykker taster'
+    'opening an app' = 'åpner en app'
+    'waiting' = 'venter'
+    'Stopped.' = 'Stoppet.'
+    'Stopped by the user.' = 'Stoppet av deg.'
+    'Paused, so Superguide stopped.' = 'Pauset, så Superguide stoppet.'
+    'Stopped: 5 minutes (the limit).' = 'Stoppet: 5 minutter er grensen.'
+    'Stopped: 120 Claude calls in the last hour (the limit).' = 'Stoppet: grensen på 120 Claude-kall i timen er nådd.'
+    'Stopped: 40 steps (the limit).' = 'Stoppet: 40 steg er grensen.'
+    'Stopped: cannot see the screens. {0}' = 'Stoppet: får ikke se skjermene. {0}'
+    'Stuck: the screen did not change after 3 actions in a row.' = 'Står fast: skjermen endret seg ikke etter 3 handlinger på rad.'
+    'Stopped: Claude did not answer. Your quota may be used up.' = 'Stoppet: Claude svarte ikke. Kvoten din kan være brukt opp.'
+    'Stopped: Claude did not give a valid action 3 times.' = 'Stoppet: Claude ga ikke en gyldig handling 3 ganger.'
+    'Claude stopped it: {0}' = 'Claude stoppet den: {0}'
+    'Stopped because you touched the mouse or keyboard.' = 'Stoppet fordi du rørte musa eller tastaturet.'
+    'Stopped: this step needs you to click yourself.' = 'Stoppet: dette steget må du klikke selv.'
+    'Stopped: Windows asks for administrator approval (UAC).' = 'Stoppet: Windows ber om administratorgodkjenning (UAC).'
+    'Stopped: a blocked window (password or banking) is in front.' = 'Stoppet: et sperret vindu (passord eller bank) er foran.'
+    'Stopped: this is a password field.' = 'Stoppet: dette er et passordfelt.'
+    'Stopped: a limit was reached (steps, time or apps).' = 'Stoppet: en grense er nådd (steg, tid eller apper).'
+    'Stopped: Superguide is not ready.' = 'Stoppet: Superguide er ikke klar.'
+    'Stopped: 3 failed actions in a row.' = 'Stoppet: 3 mislykkede handlinger på rad.'
+    'Stopped: something went wrong.' = 'Stoppet: noe gikk galt.'
     'Stuck? Press {0}' = 'Står du fast? Trykk {0}'
     'Claude Code wants Bindy to guide you (screenshots go to Claude)' = 'Claude Code vil at Bindy skal veilede deg (skjermbilder sendes til Claude)'
     'Start' = 'Start'
@@ -877,14 +909,14 @@ function Sg-DelSvar([string]$svar) {
     if ($ms.Count -ne 1) { return @{ ok = $false; fei = "SG-linjer: $($ms.Count) (må være 1)" } }
     $l = $ms[0].Groups[1].Value.Trim()
     if ($l.Length -gt 400 -or $l -match '[\x00-\x08\x0B\x0C\x0E-\x1F]') { return @{ ok = $false; fei = 'ugyldig linje' } }
-    $tall = '(\d{1,5})'
+    $tall = '([0-9]{1,5})'   # [0-9], ikke \d: \d tar også sifre fra andre skrifter, og [int] kaster på dem
     switch -Regex ($l) {
         "^(KLIKK|DKLIKK|HKLIKK)\s+$tall\s+$tall$" { return @{ ok = $true; h = $Matches[1]; a = @([int]$Matches[2], [int]$Matches[3]) } }
-        "^SCROLL\s+(opp|ned)\s+(\d{1,2})\s+$tall\s+$tall$" { $n = [int]$Matches[2]; if ($n -ge 1 -and $n -le 20) { return @{ ok = $true; h = 'SCROLL'; a = @($Matches[1], $n, [int]$Matches[3], [int]$Matches[4]) } } }
+        "^SCROLL\s+(opp|ned)\s+([0-9]{1,2})\s+$tall\s+$tall$" { $n = [int]$Matches[2]; if ($n -ge 1 -and $n -le 20) { return @{ ok = $true; h = 'SCROLL'; a = @($Matches[1].ToLower(), $n, [int]$Matches[3], [int]$Matches[4]) } } }
         '^SKRIV\s+(.{1,300})$' { return @{ ok = $true; h = 'SKRIV'; a = @($Matches[1]) } }
         '^TAST\s+([a-z0-9+]{1,30})$' { return @{ ok = $true; h = 'TAST'; a = @($Matches[1]) } }
         '^APP\s+([^\r\n]{1,80})$' { return @{ ok = $true; h = 'APP'; a = @($Matches[1].Trim()) } }
-        '^VENT\s+(\d{1,5})$' { $v = [int]$Matches[1]; if ($v -le 10000) { return @{ ok = $true; h = 'VENT'; a = @($v) } } }
+        '^VENT\s+([0-9]{1,5})$' { $v = [int]$Matches[1]; if ($v -le 10000) { return @{ ok = $true; h = 'VENT'; a = @($v) } } }
         '^FERDIG(\s+[^\r\n]{0,200})?$' { return @{ ok = $true; h = 'FERDIG'; a = @() } }
         '^STOPP(\s+[^\r\n]{0,200})?$' { return @{ ok = $true; h = 'STOPP'; a = @($l.Substring(5).Trim()) } }
     }
@@ -933,44 +965,49 @@ function Sg-Spør([string]$q, [byte[]]$jpeg, [string]$modell) {
     return (Les-Svar ($j.linjer -join "`n") $j.feil.Result)
 }
 # Løkka: se (bilde av alle skjermer) → be Claude om én handling → utfør → se på nytt. Returnerer en kort tekst om hvordan det gikk.
+function Sg-Toast([string]$t) { if (Get-Command Sett-Toast -ErrorAction SilentlyContinue) { Sett-Toast $t } }   # finnes ikke i -Sjekk
 function Sg-Kjør([string]$mål) {
-    if (-not $script:TillatSg) { return 'Superguide is off. The user turns it on in Settings.' }
-    if (-not $script:SgKlar) { return 'Superguide is not available in this build of Bindy (run the installed Bindy).' }
-    if ($script:sgAktiv -or $script:vei -or $script:jobb) { return 'Bindy is busy.' }
-    if ($script:pause) { return 'Bindy is paused.' }
-    $mål = (($mål -replace '[\x00-\x1F‪-‮⁦-⁩]', ' ').Trim()); if (-not $mål -or $mål.Length -gt 300) { return 'The goal is empty or longer than 300 characters.' }
-    $script:sgAktiv = $true; [SgUtforer]::Start(40, 300); Oppdater-Ikon
+    # Returnerer $false (med en toast) hvis den ikke startet, $true når en kjøring er ferdig.
+    if (-not $script:TillatSg) { Sg-Toast (L 'Turn on Superguide in Settings first.'); return $false }
+    if (-not $script:SgKlar) { Sg-Toast (L 'Superguide is not available in this build of Bindy.'); return $false }
+    if ($script:sgAktiv -or $script:vei -or $script:jobb) { Sg-Toast (L 'Bindy is busy. Try again in a moment.'); return $false }
+    if ($script:pause) { Sg-Toast (L 'Paused'); return $false }
+    $mål = (($mål -replace '[\x00-\x1F‪-‮⁦-⁩]', ' ').Trim()); if (-not $mål -or $mål.Length -gt 300) { Sg-Toast (L 'The goal is empty or longer than 300 characters.'); return $false }
+    $script:sgAktiv = $true; $tStart = Get-Date
     $hist = New-Object Collections.ArrayList; $sist = $null; $lik = 0; $feil = 0; $utfall = 'Stopped.'; $ok = $false
     try {
+        [SgUtforer]::Start(40, 300); Oppdater-Ikon
         for ($i = 1; $i -le 40; $i++) {
-            if ([SgUtforer]::ErStoppet -or $script:pause) { $utfall = 'Stopped by the user.'; break }
+            if ([SgUtforer]::ErStoppet -or $script:pause) { $utfall = $(if ($script:pause) { 'Paused, so Superguide stopped.' } else { 'Stopped by the user.' }); break }
+            if (((Get-Date) - $tStart).TotalSeconds -gt 300) { $utfall = 'Stopped: 5 minutes (the limit).'; break }   # Vent og Claude-kall går ikke gjennom tidstaket i SgUtforer
             $nå = Get-Date; $script:sgKall = @($script:sgKall | Where-Object { ($nå - $_).TotalMinutes -lt 60 })
             if ($script:sgKall.Count -ge 120) { $utfall = 'Stopped: 120 Claude calls in the last hour (the limit).'; break }
-            $f = Fang-Alle; if (-not $f.ok) { $utfall = "Stopped: cannot see the screens. $($f.grunn)"; break }
+            $f = Fang-Alle; if (-not $f.ok) { $utfall = (L 'Stopped: cannot see the screens. {0}' $f.grunn); break }
             try { $jpg = Til-Jpeg $f.bitmap; $bw = $f.bitmap.Width; $bh = $f.bitmap.Height; $sig = Sg-Sig $f.bitmap } finally { $f.bitmap.Dispose() }
             if ($sist -and (Sig-Diff $sig $sist) -le 1.0) { $lik++ } else { $lik = 0 }; $sist = $sig
             if ($lik -ge 3) { $utfall = 'Stuck: the screen did not change after 3 actions in a row.'; break }
             $q = "GOAL: $mål`nThe picture shows all screens and is $bw x $bh pixels.`nACTIONS SO FAR (newest last):`n" + $(if ($hist.Count) { ($hist | Select-Object -Last 8) -join "`n" } else { '(none yet)' }) + "`nGive the next single action."
             $script:sgKall += $nå
             try { $sv = Sg-Spør $q $jpg $(if ($i -eq 1 -or $lik -gt 0 -or $feil -gt 0) { $ModellSpør } else { $ModellSjekk }) }
-            catch { $utfall = if ([SgUtforer]::ErStoppet -or $script:pause) { 'Stopped by the user.' } else { "Stopped: Claude did not answer (your quota may be used up). $_" }; break }
+            catch { $utfall = if ($script:pause) { 'Paused, so Superguide stopped.' } elseif ([SgUtforer]::ErStoppet) { 'Stopped by the user.' } else { 'Stopped: Claude did not answer. Your quota may be used up.' }; break }
             $d = Sg-DelSvar $sv
             if (-not $d.ok) { $feil++; [void]$hist.Add("$i. (your last answer was not a valid SG line: $($d.fei))"); if ($feil -ge 3) { $utfall = 'Stopped: Claude did not give a valid action 3 times.'; break }; continue }
             if ($d.h -eq 'FERDIG') { $utfall = 'Done.'; $ok = $true; break }
-            if ($d.h -eq 'STOPP') { $utfall = "Claude stopped: " + (Mcp-Rens ([string]$d.a[0]) 120); break }
-            Sett-Toast "Superguide $($i): $($d.h)"
+            if ($d.h -eq 'STOPP') { $utfall = (L 'Claude stopped it: {0}' (Mcp-Rens ([string]$d.a[0]) 120)); break }
+            Sett-Toast (L 'Superguide step {0}: {1}. Esc stops.' $i (L $script:SgVerb[$d.h]))
             $res = Sg-Utfør $d $f.L $f.T $f.skala $bw $bh
             [void]$hist.Add("$i. $($d.h) $(($d.a | ForEach-Object { [string]$_ }) -join ' ') -> $res")
-            if ($res -match '^FEIL:(STOPPET|BRUKER_RORTE|TAK_|UAC|KREVER_HENRIK|SPERRET|IKKE_KLAR)') { $utfall = "Stopped ($res). " + $(if ($res -match 'KREVER_HENRIK') { 'This step needs you to click yourself.' } else { '' }); break }
-            if ($res -ne 'OK') { $feil++; if ($feil -ge 3) { $utfall = "Stopped: 3 failed actions in a row ($res)."; break } } else { $feil = 0 }
-            Start-Sleep -Milliseconds 400   # la skjermen oppdatere seg før neste bilde
+            if ($res -match '^FEIL:(STOPPET|BRUKER_RORTE|TAK_|UAC|KREVER_HENRIK|SPERRET|IKKE_KLAR|PASSORDFELT)') { $utfall = $(switch -Regex ($res) { 'BRUKER_RORTE' { 'Stopped because you touched the mouse or keyboard.' } 'KREVER_HENRIK' { 'Stopped: this step needs you to click yourself.' } 'UAC' { 'Stopped: Windows asks for administrator approval (UAC).' } 'SPERRET' { 'Stopped: a blocked window (password or banking) is in front.' } 'PASSORDFELT' { 'Stopped: this is a password field.' } 'STOPPET' { 'Stopped by the user.' } 'TAK_' { 'Stopped: a limit was reached (steps, time or apps).' } default { 'Stopped: Superguide is not ready.' } }); break }
+            if ($res -ne 'OK') { $feil++; if ($feil -ge 3) { $utfall = 'Stopped: 3 failed actions in a row.'; break } } else { $feil = 0 }
+            for ($w = 0; $w -lt 8; $w++) { [Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 50 }   # la skjermen oppdatere seg før neste bilde, og la menyen svare
         }
         if ($i -gt 40 -and -not $ok -and $utfall -eq 'Stopped.') { $utfall = 'Stopped: 40 steps (the limit).' }
-    } catch { $utfall = "Stopped: $_" }
+    } catch { $utfall = 'Stopped: something went wrong.'; try { Add-Content (Join-Path $Mappe 'bindy-feil.log') "$(Get-Date -Format s) Sg-Kjør: $_" } catch {} }
     finally { [SgUtforer]::Stopp(); $script:sgAktiv = $false; Oppdater-Ikon }
-    Sett-Toast ($utfall.Trim()); $tray.ShowBalloonTip(5000, 'Bindy', "Superguide: $($utfall.Trim())", 'Info')
-    return $utfall.Trim()
+    $vis = (L $utfall).Trim(); Sett-Toast $vis; $tray.ShowBalloonTip(6000, 'Bindy', "Superguide: $vis", 'Info')
+    return $true
 }
+$script:SgVerb = @{ KLIKK = 'clicking'; DKLIKK = 'double-clicking'; HKLIKK = 'right-clicking'; SCROLL = 'scrolling'; SKRIV = 'typing'; TAST = 'pressing keys'; APP = 'opening an app'; VENT = 'waiting' }
 # Det som vises mens svaret strømmer inn: uten styrelinjer og halvferdige koder.
 function Rens-Delvis([string]$t) {
     if ($t.Length -gt 20000) { $t = $t.Substring(0, 20000) }
@@ -1398,7 +1435,7 @@ function Mcp-Superguide($a, [string]$maskin) {   # alltid ett klikk fra brukeren
     $sg = Sperre-Alle; if ($sg) { Mcp-Logg 'bindy_superguide' $maskin 'nektet'; return (Mcp-Svar $true "Not allowed (nothing was asked or done): $sg") }
     $tray.Icon = $ikonRød; $tray.Text = (L 'Bindy: sending ...')
     try {
-        $sv = Mcp-Spør (L 'Claude Code wants Bindy to do this on your PC by itself (it clicks and types)') $mal (L 'Let Bindy do it')
+        $sv = Mcp-Spør (L 'Claude Code wants Bindy to click and type on your PC by itself') $mal (L 'Let Bindy click and type')
         if ($sv -eq 'ofte') { Mcp-Logg 'bindy_superguide' $maskin 'for ofte'; return (Mcp-Svar $true 'Asked too often (the user just declined, or three questions in ten minutes). Do not ask again now; ask the user in the chat instead.') }
         if ($sv -ne 'ja') { Mcp-Logg 'bindy_superguide' $maskin $(if ($sv -eq 'tid') { 'tidsavbrudd' } else { 'avslått' }); return (Mcp-Svar $true $(if ($sv -eq 'tid') { 'No answer within 30 seconds: treated as declined. Nothing was started.' } else { 'The user declined. Nothing was started.' })) }
         if ($script:pause -or $script:vei -or $script:jobb -or $script:sgAktiv) { return (Mcp-Svar $true 'Bindy became busy or paused while asking. Nothing was started.') }
@@ -1569,7 +1606,11 @@ if ($Sjekk) {
         $d = Sg-DelSvar $t; if ($d.ok) { Write-Host "FEIL: Sg-DelSvar skulle avvist '$($t.Substring(0, [Math]::Min(30, $t.Length)))'"; $fe++ }
     }
     if ((Sg-Utfør @{ h = 'KLIKK'; a = @(5000, 5) } 0 0 1 2000 600) -ne 'FEIL:UGYLDIG:utenfor bildet') { Write-Host 'FEIL: Sg-Utfør skulle avvist klikk utenfor bildet'; $fe++ }
-    if ((Sg-Kjør 'test') -notmatch 'Superguide is off') { Write-Host 'FEIL: Sg-Kjør skulle vært av som standard'; $fe++ }
+    if ((Sg-DelSvar "SG: KLIKK $([char]0x0663) 5").ok) { Write-Host 'FEIL: Sg-DelSvar skulle avvist ikke-ASCII-siffer'; $fe++ }
+    if ((Sg-DelSvar 'SG: SCROLL OPP 3 10 10').a[0] -cne 'opp') { Write-Host 'FEIL: Sg-DelSvar skulle gjort SCROLL-retning til små bokstaver'; $fe++ }
+    if ((Sg-DelSvar "SG: KLIKK $([char]0x0663) 5").ok) { Write-Host 'FEIL: Sg-DelSvar skulle avvist ikke-ASCII-siffer'; $fe++ }
+    if ((Sg-DelSvar 'SG: SCROLL OPP 3 10 10').a[0] -cne 'opp') { Write-Host 'FEIL: Sg-DelSvar skulle gjort SCROLL-retning til små bokstaver'; $fe++ }
+    if (Sg-Kjør 'test') { Write-Host 'FEIL: Sg-Kjør skulle vært av som standard'; $fe++ }
     $d = Del-Svar "STATUS: GJORT`nTrykk her.`n[[MARKER 10 20 110 60]]"
     if ($d.tekst -ne 'Trykk her.' -or ($d.boks -join ',') -ne '10,20,110,60' -or $d.status -ne 'GJORT') { Write-Host "FEIL: Del-Svar ($($d.status) / $($d.tekst))"; $fe++ }
     $d = Del-Svar "Hei`n[[MARKER 99999999999 1 2 3]]`n[[MARKER -5 1 2]]"
@@ -2362,7 +2403,7 @@ $musKnapp.Add_CheckedChanged({ $script:musPå = $musKnapp.Checked; try { if ($sc
 $sgKnapp = New-Object Windows.Forms.ToolStripMenuItem((L 'Superguide: do what is in the box for me')); $sgKnapp.Add_Click({
     if (-not $script:TillatSg) { Sett-Toast (L 'Turn on Superguide in Settings first.'); return }
     $m = $inn.Text.Trim(); if (-not $m) { Sett-Toast (L 'Write the goal in the box first.'); return }
-    $inn.Text = ''; [void][Windows.Forms.Application]::DoEvents(); [void](Sg-Kjør $m) })
+    $inn.Text = ''; [void][Windows.Forms.Application]::DoEvents(); if (-not (Sg-Kjør $m)) { $inn.Text = $m } })   # startet den ikke, får du målet tilbake
 $mcpKnapp = New-Object Windows.Forms.ToolStripMenuItem((L 'Connect Claude Code (MCP)…')); $mcpKnapp.Add_Click({ Mcp-Vis })
 $mcpNyKnapp = New-Object Windows.Forms.ToolStripMenuItem((L 'New MCP token')); $mcpNyKnapp.Add_Click({ Mcp-NyttToken })
 $apneKnapp.Font = New-Object Drawing.Font("Segoe UI", [single]9.75, [Drawing.FontStyle]::Bold)
@@ -2443,11 +2484,11 @@ function Vis-Innstillinger {
     $script:sgBryter = & $bryter (L 'Superguide: Bindy does the steps for you') $script:TillatSg { param($snd, $ev)
         if ($script:sgSetter) { return }
         if ($snd.Checked) {
-            $sv = [Windows.Forms.MessageBox]::Show((L 'Bindy will click, scroll and type on this PC by itself, and send screenshots to Claude while it does. It never touches passwords, payments, deleting, uninstalling or sending messages. Esc, Pause or Stop ends it at once. Turn it on?'), 'Bindy', 'YesNo', 'Warning', 'Button2')
+            $sv = [Windows.Forms.MessageBox]::Show($script:innstForm, (L 'Bindy will click, scroll and type on this PC by itself, and send screenshots to Claude while it does. It never touches passwords, payments, deleting, uninstalling or sending messages. Esc, Pause or Stop ends it at once. Turn it on?'), 'Bindy', 'YesNo', 'Warning', 'Button2')
             if ($sv -ne 'Yes') { $script:sgSetter = $true; $snd.Checked = $false; $script:sgSetter = $false; return }
         }
         $script:TillatSg = $snd.Checked; Lagre-Innst }
-    [void](& $lab (L 'Off by default. Start it from the tray menu, or Claude Code asks you first.') 48 $script:yy 388 $fSmå $cDempet); $script:yy += 24
+    [void](& $lab (L 'Off by default. Start it from the tray menu.') 48 $script:yy 388 $fSmå $cDempet); $script:yy += 24
     [void](& $bryter (L 'Start Bindy with Windows') (Autostart-På) { param($snd, $ev) Sett-Autostart $snd.Checked })
     $y = $script:yy + 8
     # --- Hurtigtaster

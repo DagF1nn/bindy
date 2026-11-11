@@ -46,7 +46,7 @@ public static class SgUtforer {
     static int maxSek = 300;
     static readonly object lås = new object();
     // Needs Henrik's own click: payments, deleting, uninstalling, sending, security settings. Matched on window title and element name.
-    static readonly Regex Bekreft = new Regex("uninstall|avinstaller|delete|slett|formater|format (disk|drive|station)|betal|payment|purchase|checkout|kjøp|buy now|^send\b|send (e-?post|melding|message|email)|\bpay\b|pay now|place order|bestill|overfør|transfer|\bremove\b|\bfjern\b|\brun\b|\bkjør\b|\ballow\b|\btillat\b|sign out|logg ut|publish|firewall|brannmur|defender|windows security|windows-sikkerhet|user account control|brukerkontokontroll|smartscreen|reset this pc|tilbakestill pc|empty recycle|tøm papirkurv", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    static readonly Regex Bekreft = new Regex(@"uninstall|avinstaller|delete|slett|formater|format (disk|drive|station)|betal|payment|purchase|checkout|kjøp|buy now|^send\b|send (e-?post|melding|message|email)|\bpay\b|pay now|place order|bestill|overfør|transfer|\bremove\b|\bfjern\b|\brun\b|\bkjør\b|\ballow\b|\btillat\b|sign out|logg ut|publish|firewall|brannmur|defender|windows security|windows-sikkerhet|user account control|brukerkontokontroll|smartscreen|reset this pc|tilbakestill pc|empty recycle|tøm papirkurv", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     // Typing here would be running code: terminals and the registry always need Henrik himself.
     static readonly Regex ProsessKreverHenrik = new Regex("^(cmd|powershell|powershell_ise|pwsh|windowsterminal|wt|conhost|regedit|mmc|taskmgr|wscript|cscript|mshta|python|pythonw|py|wsl|wslhost|bash|ssh|code|mintty|msiexec|msconfig|control|searchhost|searchapp|shellexperiencehost|startmenuexperiencehost|run)$", RegexOptions.IgnoreCase);
     static readonly Regex AppNekt = new Regex("uninstall|avinstaller|setup|install|regedit|cmd|powershell|terminal|command prompt|ledetekst", RegexOptions.IgnoreCase);
@@ -91,7 +91,7 @@ public static class SgUtforer {
         return Send("SKRIV", l.ToArray());
     }
 
-    // "ctrl+s", "alt+f4", "enter", "win+d". Win combinations other than d/e/i/s/a are refused (Win+R and friends run code).
+    // "ctrl+s", "alt+f4", "enter", "win+d". Win combinations other than d/i/a are refused (Win+R and friends run code).
     public static string Tast(string kombinasjon) {
         ushort[] mods; ushort key; string fe = Les(kombinasjon, out mods, out key);
         if (fe != null) return Svar("TAST", fe);
@@ -106,7 +106,7 @@ public static class SgUtforer {
 
     // Opens an app from Get-StartApps by its AppID (bindy.ps1 does the name lookup).
     public static string ApneApp(string appId) {
-        if (appId == null || !Regex.IsMatch(appId, @"^[\w.!\-\\ ]{1,256}$") || AppNekt.IsMatch(appId)) return Svar("APP", "FEIL:UGYLDIG:app-id");
+        if (appId == null || !Regex.IsMatch(appId, @"^[\w.!\-\\ ]{1,256}\z") || AppNekt.IsMatch(appId)) return Svar("APP", "FEIL:UGYLDIG:app-id");
         string g = Port("APP", false, 0, 0); if (g != null) return Svar("APP", g);
         lock (lås) { if (apninger >= MaxApninger) return Svar("APP", "FEIL:TAK_APP"); apninger++; }
         try { Process.Start("explorer.exe", "shell:AppsFolder\\" + appId); } catch (Exception e) { return Svar("APP", "FEIL:START:" + e.Message); }

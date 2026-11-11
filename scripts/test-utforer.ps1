@@ -31,6 +31,9 @@ Sjekk 'ctrl+shift+esc nektes' ([SgUtforer]::Tast('ctrl+shift+esc')) 'FEIL:UGYLDI
 Sjekk 'delete krever Henrik' ([SgUtforer]::Tast('delete')) 'FEIL:KREVER_HENRIK'
 Sjekk 'ctrl+enter krever Henrik' ([SgUtforer]::Tast('ctrl+enter')) 'FEIL:KREVER_HENRIK'
 Sjekk 'alt+f4 krever Henrik' ([SgUtforer]::Tast('alt+f4')) 'FEIL:KREVER_HENRIK'
+$bk = [SgUtforer].GetField('Bekreft', [Reflection.BindingFlags]'NonPublic,Static').GetValue($null)   # \b i en vanlig C#-streng var backspace: ordgrenser må virke
+foreach ($n in 'Send', 'Send (Ctrl-Enter)', 'Run', 'Allow', 'Remove', 'Pay', 'Fjern', 'Kjør', 'Tillat', 'Pay now', 'Uninstall', 'Windows Security') { Sjekk "Bekreft treffer '$n'" ([string]$bk.IsMatch($n)) 'True' }
+foreach ($n in 'Resend', 'Prune', 'Payload', 'Cancel', 'Save') { Sjekk "Bekreft treffer ikke '$n'" ([string]$bk.IsMatch($n)) 'False' }
 Sjekk 'ukjent tast' ([SgUtforer]::Tast('foo')) 'FEIL:UGYLDIG'
 Sjekk 'dobbel modifikator' ([SgUtforer]::Tast('ctrl+ctrl+s')) 'FEIL:UGYLDIG'
 Sjekk 'kontrolltegn i Skriv' ([SgUtforer]::Skriv("a`nb")) 'FEIL:UGYLDIG'
