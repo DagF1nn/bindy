@@ -19,7 +19,7 @@ Copy-Item (Join-Path $rot 'host') $stage -Recurse; Copy-Item (Join-Path $rot 'sr
 $exe = Join-Path $stage 'out\BindyStart.exe'; $skript = Join-Path $stage 'src\bindy.ps1'
 Write-Host "This will be installed in $dest and given UI access:"
 foreach ($f in $exe, $skript) { "  {0}  SHA-256 {1}" -f (Split-Path $f -Leaf), (Get-FileHash $f -Algorithm SHA256).Hash }
-Write-Host "Compare the bindy.ps1 sum with the one on the release page on GitHub."
+Write-Host "Check that the code you are installing is the one you read (src\bindy.ps1 is the whole program)."
 Write-Host "A self-signed certificate will also be made trusted on this machine. Read SECURITY.md first."
 if (-not $Yes -and (Read-Host 'Continue? (y/N)') -notmatch '^[yY]') { Remove-Item $stage -Recurse -Force; 'Cancelled.'; return }
 

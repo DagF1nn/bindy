@@ -31,7 +31,7 @@ User-visible text is written in English in the code and wrapped as `(L 'English 
 
 `src/bindy.ps1` has a small MCP server (Streamable HTTP, JSON-RPC over POST, stateless) in the block "MCP: Claude Code kan bruke Bindy som verktøy". A C# class (`McpServer`, `McpGuard`) does the network part (loopback only, Host/Origin/token/size checks) and puts requests in a queue; PowerShell reads the queue on the UI thread (`Mcp-Behandle`, called from the main clock) so all UI and capture happens there. Tools: `bindy_status`, `bindy_se`, `bindy_pek`, `bindy_veiled` (see `Mcp-Rpc`). Approval is `Mcp-Spør` (a non-activating window, one click, 30 s timeout).
 
-Rules for changes: everything in a request is untrusted (validate types, lengths and numbers, and add a case to `-Sjekk`); never add a tool that clicks, types or pastes; never write screenshots to disk; the block list must be checked before asking and again when capturing; keep the log to time, tool, machine and outcome.
+Rules for changes: everything in a request is untrusted (validate types, lengths and numbers, and add a case to `-Sjekk`); never add an MCP tool that clicks, types or pastes without a per-use click from the user (only `bindy_superguide` does, and only through `SgUtforer`); never write screenshots to disk; the block list must be checked before asking and again when capturing; keep the log to time, tool, machine and outcome.
 
 ## Letting Claude Code start a guidance (deprecated: use the MCP tool `bindy_veiled`)
 
